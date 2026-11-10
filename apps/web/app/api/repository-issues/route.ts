@@ -8,13 +8,10 @@ import {
 
 const SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
-function validateOwnerAndName(owner: unknown, name: unknown): owner is string {
-  return typeof owner === "string" &&
-    typeof name === "string" &&
-    SEGMENT_PATTERN.test(owner) &&
-    SEGMENT_PATTERN.test(name) &&
-    !owner.endsWith(".") &&
-    !name.endsWith(".");
+function isValidSegment(value: unknown): value is string {
+  return typeof value === "string" &&
+    SEGMENT_PATTERN.test(value) &&
+    !value.endsWith(".");
 }
 
 function apiPath(owner: string, name: string, number?: number) {
@@ -34,7 +31,7 @@ export async function GET(request: Request) {
   const owner = url.searchParams.get("owner");
   const name = url.searchParams.get("name");
   const numberRaw = url.searchParams.get("number");
-  if (!validateOwnerAndName(owner, name)) {
+  if (!isValidSegment(owner) || !isValidSegment(name)) {
     return NextResponse.json({ error: "A valid owner and repository name are required." }, { status: 400 });
   }
 
@@ -72,7 +69,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A valid JSON body is required." }, { status: 400 });
   }
 
-  if (!validateOwnerAndName(input.owner, input.name)) {
+  if (!isValidSegment(input.owner) || !isValidSegment(input.name)) {
     return NextResponse.json({ error: "A valid owner and repository name are required." }, { status: 400 });
   }
   const isComment = input.number !== undefined;

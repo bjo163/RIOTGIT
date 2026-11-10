@@ -427,9 +427,7 @@ pub(crate) async fn logout(
 ) -> Result<StatusCode, ApiError> {
     let actor = authenticate(&headers, &state).await?;
     if let Some(session_id) = actor.session_id {
-        sqlx::query(
-            "UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
-        )
+        sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
         .bind(unix_now())
         .bind(&session_id)
         .execute(&state.pool)

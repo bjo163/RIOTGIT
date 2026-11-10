@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
-API_BASE="http://127.0.0.1:\${RIOTGIT_API_PORT:-8787}"
-SSH_PORT="\${RIOTGIT_SSH_PORT:-2222}"
-ADMIN_USERNAME="\${RIOTGIT_ADMIN_USERNAME:?Set RIOTGIT_ADMIN_USERNAME in .env}"
-ADMIN_PASSWORD="\${RIOTGIT_ADMIN_PASSWORD:?Set RIOTGIT_ADMIN_PASSWORD in .env}"
+API_BASE="http://127.0.0.1:${RIOTGIT_API_PORT:-8787}"
+SSH_PORT="${RIOTGIT_SSH_PORT:-2222}"
+ADMIN_USERNAME="${RIOTGIT_ADMIN_USERNAME:?Set RIOTGIT_ADMIN_USERNAME in .env}"
+ADMIN_PASSWORD="${RIOTGIT_ADMIN_PASSWORD:?Set RIOTGIT_ADMIN_PASSWORD in .env}"
 KNOWN_HOSTS="$TMP_DIR/known_hosts"
 KEY_FILE="$TMP_DIR/ssh-smoke"
-REPO_NAME="ssh-smoke-\$(date -u +%H%M%S)"
+REPO_NAME="ssh-smoke-$(date -u +%H%M%S)"
 
 cleanup() {
   status=$?

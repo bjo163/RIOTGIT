@@ -5,7 +5,7 @@ use axum::{
     extract::{Path as AxumPath, Query, State},
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{any, get},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -22,13 +22,13 @@ use uuid::Uuid;
 mod git_http;
 
 #[derive(Clone)]
-struct AppState {
-    pool: SqlitePool,
-    storage_root: PathBuf,
-    template_dir: PathBuf,
-    empty_git_config: PathBuf,
-    git_bin: String,
-    api_token_digest: Option<[u8; 32]>,
+pub(crate) struct AppState {
+    pub(crate) pool: SqlitePool,
+    pub(crate) storage_root: PathBuf,
+    pub(crate) template_dir: PathBuf,
+    pub(crate) empty_git_config: PathBuf,
+    pub(crate) git_bin: String,
+    pub(crate) api_token_digest: Option<[u8; 32]>,
 }
 
 #[derive(Debug, Serialize)]

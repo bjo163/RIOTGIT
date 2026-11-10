@@ -1,5 +1,7 @@
 use std::{env, process::Stdio, time::Duration};
 
+use anyhow::{Result, anyhow};
+
 use axum::{
     body::{Body, to_bytes},
     extract::{Path as AxumPath, Request, State},
@@ -92,7 +94,7 @@ fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
             && matches!(path, "git-upload-pack" | "git-receive-pack"))
 }
 
-fn cgi_response(output: &[u8]) -> Result<Response, ()> {
+fn cgi_response(output: &[u8]) -> Result<Response> {
     let (header_end, separator_len) = output
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
@@ -103,7 +105,7 @@ fn cgi_response(output: &[u8]) -> Result<Response, ()> {
                 .position(|window| window == b"\n\n")
                 .map(|index| (index, 2))
         })
-        .ok_or(())?;
+        .ok_or_else(|| anyhow!("missing CGI header separator"))?;
 
     let mut status = StatusCode::OK;
     let mut response_headers = Vec::new();
@@ -113,7 +115,7 @@ fn cgi_response(output: &[u8]) -> Result<Response, ()> {
         if line.is_empty() {
             continue;
         }
-        let line = std::str::from_utf8(line).map_err(|_| ())?;
+        let line = std::str::from_utf8(line)?;
         let Some((name, value)) = line.split_once(':') else {
             continue;
         };
@@ -124,12 +126,12 @@ fn cgi_response(output: &[u8]) -> Result<Response, ()> {
                 .split_whitespace()
                 .next()
                 .and_then(|value| value.parse::<u16>().ok())
-                .ok_or(())?;
-            status = StatusCode::from_u16(code).map_err(|_| ())?;
+                .ok_or_else(|| anyhow!("invalid CGI status line"))?;
+            status = StatusCode::from_u16(code)?;
             continue;
         }
 
-        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|_| ())?;
+        let header_name = HeaderName::from_bytes(name.as_bytes())?;
         if matches!(
             header_name.as_str(),
             "connection"
@@ -143,7 +145,7 @@ fn cgi_response(output: &[u8]) -> Result<Response, ()> {
         ) {
             continue;
         }
-        let header_value = HeaderValue::from_str(value).map_err(|_| ())?;
+        let header_value = HeaderValue::from_str(value)?;
         response_headers.push((header_name, header_value));
     }
 
@@ -152,7 +154,7 @@ fn cgi_response(output: &[u8]) -> Result<Response, ()> {
     for (name, value) in response_headers {
         builder = builder.header(name, value);
     }
-    builder.body(Body::from(body)).map_err(|_| ())
+    builder.body(Body::from(body)).map_err(Into::into)
 }
 
 pub(crate) async fn transport(

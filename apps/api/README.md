@@ -54,7 +54,7 @@ curl -X POST http://127.0.0.1:8787/api/v1/repositories \
 
 This reserves metadata, initializes a bare Git repository in a staging directory using the native Git executable, then atomically activates its storage path.
 
-Git smart HTTP is routed through native `git http-backend` after an authenticated repository lookup. Requests are capped at 64 MiB and Git execution at 120 seconds. SSH transport, per-user identities, read-only access, branch protection, and large-pack streaming are not implemented yet.
+Git smart HTTP is routed through native `git http-backend` after an authenticated repository lookup. Requests are capped at 64 MiB and Git execution at 120 seconds. The CI smoke test creates a repository, pushes a commit with the normal Git CLI, clones it over HTTP, and compares the resulting file. See [the successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42876569801). SSH transport, per-user identities, read-only access, branch protection, and large-pack streaming are not implemented yet.
 
 ## Tests
 

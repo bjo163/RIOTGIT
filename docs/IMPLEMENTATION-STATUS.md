@@ -26,7 +26,7 @@ See the CI run: https://github.com/bjo163/RIOTGIT/actions/runs/42872536139
 
 ## Implemented in the current Git Core increment
 
-Pending CI verification after this update:
+Verified by CI run https://github.com/bjo163/RIOTGIT/actions/runs/42876569801 on commit `a55d7670890b80b6e5dc8a301b37ddcc83a64ff3`:
 - SQLite-backed repository metadata.
 - Native Git bare repository creation via controlled argument-based process invocation.
 - Duplicate repository conflict response.
@@ -38,7 +38,10 @@ Pending CI verification after this update:
 
 - [ ] Per-user authentication, sessions, SSH key lifecycle, organization/team RBAC.
 - [ ] Git SSH forced-command transport.
-- [ ] Per-user/read-only Git permissions, branch protection checks at receive-pack, large-pack streaming, and transport integration tests.
+- [ ] Per-user/read-only Git permissions and branch-protection checks at receive-pack.
+- [ ] Large-pack streaming and bounded memory behavior for very large repositories.
+- [ ] SSH forced-command transport and key revocation.
+- [ ] Authenticated Git HTTP integration test for read-only vs write permissions (current smoke test uses the instance-admin token).
 - [ ] Git LFS.
 - [ ] Live web API integration and real repository views.
 - [ ] Code tree/blob/commit/diff browser.

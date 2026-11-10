@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const repositories = [
   { name: "rift-engine", path: "riot-labs/rift-engine", language: "Rust", updated: "12 min ago", branch: "main", status: "clean" },
   { name: "noise-lab", path: "riot-labs/noise-lab", language: "TypeScript", updated: "48 min ago", branch: "main", status: "review" },
@@ -14,10 +16,10 @@ export default function Home() {
   return (
     <main className="shell">
       <aside className="rail">
-        <a className="brand" href="/" aria-label="R!OTGIT home">
+        <Link className="brand" href="/" aria-label="R!OTGIT home">
           <span className="brand-mark">R!</span>
           <span className="brand-name">OTGIT<span className="brand-dot">.</span></span>
-        </a>
+        </Link>
         <div className="rail-caption">THE NETWORK</div>
         <nav className="nav" aria-label="Main navigation">
           <a className="nav-item active" href="#overview"><span>▦</span> Overview</a>

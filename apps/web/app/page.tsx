@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type User = {
   id: string;
@@ -28,6 +29,7 @@ function formatDate(value: string): string {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export default function Home() {
     setSigningOut(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      window.location.assign("/login");
+      router.push("/login");
     } catch {
       setError("Sign-out could not reach the API. Try again.");
       setSigningOut(false);

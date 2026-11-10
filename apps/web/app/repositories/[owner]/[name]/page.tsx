@@ -142,7 +142,10 @@ export default function RepositoryPage() {
   }, [owner, name, reference]);
 
   useEffect(() => {
-    void loadTree("", "HEAD");
+    const timer = window.setTimeout(() => {
+      void loadTree("", "HEAD");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadTree]);
 
   const crumbs = path ? path.split("/") : [];

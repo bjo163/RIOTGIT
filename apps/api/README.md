@@ -48,6 +48,11 @@ The API listens on `127.0.0.1:8787` by default.
 - `GET /api/v1/repositories/{owner}/{name}/milestones` and `POST .../milestones` — list and create milestones.
 - `PUT /api/v1/repositories/{owner}/{name}/issues/{number}/milestone` — assign an open milestone.
 - `DELETE /api/v1/repositories/{owner}/{name}/issues/{number}/milestone` — clear the milestone assignment.
+- `GET /api/v1/repositories/{owner}/{name}/branch-protection` — list branch rules.
+- `POST /api/v1/repositories/{owner}/{name}/branch-protection` — create or update a rule (repository admin).
+- `DELETE /api/v1/repositories/{owner}/{name}/branch-protection?branch_name=main` — remove a rule (repository admin).
+
+Branch protection is currently enforced on Git Smart HTTP receive-pack. SSH transport is not implemented yet.
 - `PUT /api/v1/repositories/{owner}/{name}/access/{username}` — grant `read`, `write`, or `admin`.
 - `DELETE /api/v1/repositories/{owner}/{name}/access/{username}` — revoke a grant.
 - `GET /git/{owner}/{repo}.git/info/refs?service=git-upload-pack` — fetch/clone discovery.

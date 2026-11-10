@@ -124,7 +124,7 @@ async fn verify_password(hash: String, password: String) -> bool {
     .unwrap_or(false)
 }
 
-async fn record_audit(
+pub(crate) async fn record_audit(
     pool: &SqlitePool,
     actor_user_id: Option<&str>,
     action: &str,
@@ -260,6 +260,29 @@ pub(crate) async fn authenticate(
     actor_from_token(token, state)
         .await
         .ok_or_else(ApiError::unauthorized)
+}
+
+pub(crate) async fn can_manage_repository(
+    state: &AppState,
+    actor: &Actor,
+    repository_id: &str,
+    owner: &str,
+) -> bool {
+    if actor.is_admin() || actor.username.eq_ignore_ascii_case(owner) {
+        return true;
+    }
+
+    matches!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT permission FROM repository_access
+             WHERE repository_id = ? AND user_id = ?",
+        )
+        .bind(repository_id)
+        .bind(&actor.user_id)
+        .fetch_optional(&state.pool)
+        .await,
+        Ok(Some(permission)) if permission == "admin"
+    )
 }
 
 pub(crate) async fn can_access_repository(

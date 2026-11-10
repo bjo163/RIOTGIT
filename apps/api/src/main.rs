@@ -3,9 +3,9 @@ use std::{env, net::SocketAddr, path::PathBuf, process::Stdio, time::Duration};
 use axum::{
     Json, Router,
     extract::{Path as AxumPath, Query, State},
-    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{any, get, post, put},
+    routing::{any, delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,13 +13,12 @@ use sqlx::{
     FromRow, SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
-use subtle::ConstantTimeEq;
 use tokio::{fs, net::TcpListener, process::Command, time::timeout};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-mod auth;
+pub(crate) mod auth;
 mod git_http;
 
 #[derive(Clone)]
@@ -140,6 +139,11 @@ struct CreateRepositoryRequest {
 
 fn default_visibility() -> String {
     "private".to_owned()
+}
+
+#[derive(Debug, Deserialize)]
+struct GrantRepositoryAccessRequest {
+    permission: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -499,6 +503,144 @@ async fn create_repository(
     }
 }
 
+async fn grant_repository_access(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((owner, name, username)): AxumPath<(String, String, String)>,
+    Json(input): Json<GrantRepositoryAccessRequest>,
+) -> Result<StatusCode, ApiError> {
+    let actor = auth::authenticate(&headers, &state).await?;
+    if !matches!(input.permission.as_str(), "read" | "write" | "admin") {
+        return Err(ApiError::bad_request(
+            "Permission must be read, write, or admin.",
+        ));
+    }
+
+    let repository = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, owner FROM repositories WHERE owner = ? AND name = ? AND state = 'ready'",
+    )
+    .bind(&owner)
+    .bind(&name)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, "failed to load repository for access grant");
+        ApiError::internal()
+    })?
+    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "Repository not found."))?;
+
+    let (repository_id, repository_owner) = repository;
+    if !auth::can_manage_repository(&state, &actor, &repository_id, &repository_owner).await {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Repository owner or administrator permission is required.",
+        ));
+    }
+
+    let target_user_id = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM users WHERE username = ? COLLATE NOCASE AND status = 'active'",
+    )
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, "failed to resolve access-grant user");
+        ApiError::internal()
+    })?
+    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "user_not_found", "User not found."))?;
+
+    sqlx::query(
+        "INSERT INTO repository_access (repository_id, user_id, permission, granted_by)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(repository_id, user_id)
+         DO UPDATE SET permission = excluded.permission, granted_by = excluded.granted_by",
+    )
+    .bind(&repository_id)
+    .bind(&target_user_id)
+    .bind(&input.permission)
+    .bind((actor.user_id != "system").then_some(actor.user_id.as_str()))
+    .execute(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, "failed to persist repository access grant");
+        ApiError::internal()
+    })?;
+
+    auth::record_audit(
+        &state.pool,
+        (actor.user_id != "system").then_some(actor.user_id.as_str()),
+        "repository.grant_access",
+        "repository",
+        Some(&repository_id),
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn revoke_repository_access(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((owner, name, username)): AxumPath<(String, String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let actor = auth::authenticate(&headers, &state).await?;
+    let repository = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, owner FROM repositories WHERE owner = ? AND name = ? AND state = 'ready'",
+    )
+    .bind(&owner)
+    .bind(&name)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, "failed to load repository for access revocation");
+        ApiError::internal()
+    })?
+    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "Repository not found."))?;
+
+    let (repository_id, repository_owner) = repository;
+    if !auth::can_manage_repository(&state, &actor, &repository_id, &repository_owner).await {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Repository owner or administrator permission is required.",
+        ));
+    }
+
+    let target_user_id = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
+    )
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, "failed to resolve access-revocation user");
+        ApiError::internal()
+    })?
+    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "user_not_found", "User not found."))?;
+
+    sqlx::query("DELETE FROM repository_access WHERE repository_id = ? AND user_id = ?")
+        .bind(&repository_id)
+        .bind(&target_user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            error!(%error, "failed to revoke repository access");
+            ApiError::internal()
+        })?;
+
+    auth::record_audit(
+        &state.pool,
+        (actor.user_id != "system").then_some(actor.user_id.as_str()),
+        "repository.revoke_access",
+        "repository",
+        Some(&repository_id),
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(error) = tokio::signal::ctrl_c().await {
@@ -566,6 +708,10 @@ async fn main() -> anyhow::Result<()> {
             get(list_repositories).post(create_repository),
         )
         .route("/api/v1/repositories/{owner}/{name}", get(get_repository))
+        .route(
+            "/api/v1/repositories/{owner}/{name}/access/{username}",
+            put(grant_repository_access).delete(revoke_repository_access),
+        )
         .route("/git/{owner}/{repo}/{*path}", any(git_http::transport))
         .with_state(state);
 

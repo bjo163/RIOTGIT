@@ -1,10 +1,4 @@
-use std::{
-    env,
-    net::SocketAddr,
-    path::PathBuf,
-    process::Stdio,
-    time::Duration,
-};
+use std::{env, net::SocketAddr, path::PathBuf, process::Stdio, time::Duration};
 
 use axum::{
     Json, Router,

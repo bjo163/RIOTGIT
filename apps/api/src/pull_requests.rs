@@ -673,16 +673,16 @@ async fn has_required_approval(
     pull: &PullRequest,
 ) -> Result<bool, ApiError> {
     let approvals: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pull_request_reviews r
-         WHERE r.pull_request_id = ?
-           AND r.state = 'approved'
-           AND r.reviewer_id != ?
-           AND r.submitted_at = (
-               SELECT MAX(r2.submitted_at)
-               FROM pull_request_reviews r2
-               WHERE r2.pull_request_id = r.pull_request_id
-                 AND r2.reviewer_id = r.reviewer_id
-           )",
+        "SELECT COUNT(*) FROM (
+             SELECT reviewer_id, state,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY reviewer_id
+                        ORDER BY submitted_at DESC, id DESC
+                    ) AS review_rank
+             FROM pull_request_reviews
+             WHERE pull_request_id = ?
+         ) latest
+         WHERE review_rank = 1 AND state = 'approved' AND reviewer_id != ?",
     )
     .bind(&pull.id)
     .bind(&pull.author_id)

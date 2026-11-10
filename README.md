@@ -25,9 +25,42 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
 - Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.
 - Docker Compose single-node profile and GitHub Actions checks.
-- Automated Git/auth smoke test: bootstrap → login → grant read → clone → reject push → revoke → reject clone → logout.
+- Rust CLI for login, identity, repository list/create/clone, SSH-key management, and logout.
+- SSH public-key register/list/revoke API and per-username login failure throttling.
+- Same-origin guard for mutating Next.js web API routes.
+- Docker-volume backup/restore scripts and recovery runbook (restore drill still required).
 
 See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42893061450).
+
+## Terminal CLI
+
+Build:
+
+```bash
+cargo build --release -p riotgit
+```
+
+Sign in and use common repository workflows:
+
+```bash
+riotgit login --server https://git.example.com --username builder
+riotgit whoami
+riotgit repo list
+riotgit repo create --name notes --visibility private
+riotgit repo clone builder notes
+riotgit ssh-key add ~/.ssh/id_ed25519.pub
+```
+
+See [CLI guide](apps/cli/README.md). SSH key registration is available; OpenSSH clone/push transport remains a separate unfinished feature.
+
+## Backup and recovery
+
+```bash
+bash scripts/backup.sh
+bash scripts/restore.sh ./backups/riotgit-data-YYYYMMDDTHHMMSSZ.tar.gz
+```
+
+Scripts snapshot the complete single-node data volume and create a pre-restore safety archive. A separate-host restore drill is still required before calling recovery production-verified. See [Backup & Restore](docs/BACKUP-RESTORE.md).
 
 ## Product pillars
 
@@ -48,9 +81,9 @@ See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest succe
 | Metadata | SQLx + versioned migrations |
 | Git storage | Native bare repositories on filesystem |
 | Git Smart HTTP | Native `git http-backend` behind authenticated API route |
-| Identity | Argon2 password hashes + revocable bearer sessions |
+| Identity | Argon2 password hashes, revocable bearer sessions, SSH key registry |
 | Browser session | HttpOnly, SameSite=Lax cookie managed by Next.js server routes |
-| Deployment | Docker Compose single-node profile |
+| Deployment | Docker Compose single-node profile, volume backup/restore scripts |
 
 Native Git stays canonical. gitoxide and Radicle are research/integration directions, not required dependencies of the core MVP.
 
@@ -132,7 +165,7 @@ To push, the session must have repository `write` or `admin` permission. A `read
 
 ## Not implemented yet
 
-SSH transport/key lifecycle, pull requests/reviews/merge engine, CLI/TUI, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agents, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, and automated backup/restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. Do not treat R!OTGIT as a production-ready multi-user forge until those relevant security and recovery gates pass.
+OpenSSH forced-command clone/push, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and automated restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
 
 ## Engineering rules
 

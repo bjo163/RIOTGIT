@@ -1,0 +1,54 @@
+name: riotgit
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    image: riotgit/api:local
+    restart: unless-stopped
+    environment:
+      RIOTGIT_BIND: 0.0.0.0:8787
+      RIOTGIT_API_TOKEN: ${RIOTGIT_API_TOKEN:?Set RIOTGIT_API_TOKEN in .env}
+      RIOTGIT_DATABASE_PATH: /var/lib/riotgit/riotgit.db
+      RIOTGIT_STORAGE_ROOT: /var/lib/riotgit/repositories
+      RIOTGIT_GIT_BIN: git
+      RUST_LOG: riotgit_api=info,sqlx=warn
+    volumes:
+      - riotgit-data:/var/lib/riotgit
+    ports:
+      - "127.0.0.1:${RIOTGIT_API_PORT:-8787}:8787"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8787/health/ready"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    image: riotgit/web:local
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${RIOTGIT_WEB_PORT:-3000}:3000"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+
+volumes:
+  riotgit-data:

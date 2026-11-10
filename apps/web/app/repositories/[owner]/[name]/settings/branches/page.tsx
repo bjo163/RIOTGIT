@@ -88,6 +88,10 @@ export default function BranchProtectionPage() {
   }
 
   async function removeRule(rule: BranchRule) {
+    const confirmed = window.confirm(
+      `Remove protection from ${rule.branch_name}? Direct Git pushes may be allowed again.`,
+    );
+    if (!confirmed) return;
     setError("");
     setNotice("");
     const query = new URLSearchParams({

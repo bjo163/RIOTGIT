@@ -142,7 +142,10 @@ impl Api {
     }
 
     fn post(&self, path: &str, payload: &Value) -> Result<Value> {
-        self.send(self.authorized(self.client.post(self.endpoint(path))).json(payload))
+        self.send(
+            self.authorized(self.client.post(self.endpoint(path)))
+                .json(payload),
+        )
     }
 
     fn delete(&self, path: &str) -> Result<()> {
@@ -198,13 +201,16 @@ fn response_error(response: reqwest::blocking::Response) -> anyhow::Error {
 }
 
 fn config_path() -> Result<PathBuf> {
-    let root = dirs::config_dir().context("Could not resolve the operating-system config directory")?;
+    let root =
+        dirs::config_dir().context("Could not resolve the operating-system config directory")?;
     Ok(root.join("riotgit").join("config.json"))
 }
 
 fn write_config(config: &LocalConfig) -> Result<()> {
     let path = config_path()?;
-    let parent = path.parent().context("Config path has no parent directory")?;
+    let parent = path
+        .parent()
+        .context("Config path has no parent directory")?;
     fs::create_dir_all(parent)?;
     let temporary = parent.join("config.json.tmp");
     fs::write(&temporary, serde_json::to_vec_pretty(config)?)?;
@@ -221,7 +227,8 @@ fn write_config(config: &LocalConfig) -> Result<()> {
 }
 
 fn normalize_server(value: &str) -> Result<String> {
-    let parsed = reqwest::Url::parse(value.trim()).context("Server must be a valid absolute URL")?;
+    let parsed =
+        reqwest::Url::parse(value.trim()).context("Server must be a valid absolute URL")?;
     if !matches!(parsed.scheme(), "http" | "https")
         || parsed.host_str().is_none()
         || !parsed.username().is_empty()
@@ -285,7 +292,10 @@ fn print_repositories(value: &Value) {
         println!("No repositories visible to this account.");
         return;
     }
-    println!("{:<36} {:<10} {:<10} DESCRIPTION", "REPOSITORY", "VISIBILITY", "STATE");
+    println!(
+        "{:<36} {:<10} {:<10} DESCRIPTION",
+        "REPOSITORY", "VISIBILITY", "STATE"
+    );
     for item in items {
         let full_name = format!(
             "{}/{}",
@@ -295,9 +305,13 @@ fn print_repositories(value: &Value) {
         println!(
             "{:<36} {:<10} {:<10} {}",
             full_name,
-            item.get("visibility").and_then(Value::as_str).unwrap_or("?"),
+            item.get("visibility")
+                .and_then(Value::as_str)
+                .unwrap_or("?"),
             item.get("state").and_then(Value::as_str).unwrap_or("?"),
-            item.get("description").and_then(Value::as_str).unwrap_or("")
+            item.get("description")
+                .and_then(Value::as_str)
+                .unwrap_or("")
         );
     }
 }
@@ -309,7 +323,10 @@ fn clone_repository(api: &Api, owner: &str, name: &str, path: Option<PathBuf>) -
             .map(|mut entries| entries.next().is_some())
             .unwrap_or(true)
     {
-        bail!("Target path {} already exists and is not empty", target.display());
+        bail!(
+            "Target path {} already exists and is not empty",
+            target.display()
+        );
     }
     let url = format!("{}/git/{owner}/{name}.git", api.config.server);
     let mut command = ProcessCommand::new("git");

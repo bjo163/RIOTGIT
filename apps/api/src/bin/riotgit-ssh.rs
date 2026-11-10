@@ -59,7 +59,7 @@ fn parse_original_command(value: &str) -> Result<(GitService, String, String)> {
     };
 
     let raw_path = parts[1];
-    let path = if raw_path.len() >= 2
+    let quoted_path = if raw_path.len() >= 2
         && ((raw_path.starts_with('\'') && raw_path.ends_with('\''))
             || (raw_path.starts_with('"') && raw_path.ends_with('"')))
     {
@@ -68,6 +68,10 @@ fn parse_original_command(value: &str) -> Result<(GitService, String, String)> {
         raw_path
     };
 
+    // Git's ssh:// transport prefixes the repository path with one slash.
+    // Strip exactly one slash; a second slash, traversal segment, shell
+    // metacharacter, or non-repository path remains rejected below.
+    let path = quoted_path.strip_prefix('/').unwrap_or(quoted_path);
     if path.starts_with('/')
         || path.starts_with('~')
         || path
@@ -195,6 +199,12 @@ mod tests {
         assert_eq!(owner, "builder");
         assert_eq!(name, "project");
 
+        let (service, owner, name) =
+            parse_original_command("git-upload-pack '/builder/project.git'").unwrap();
+        assert!(matches!(service, GitService::UploadPack));
+        assert_eq!(owner, "builder");
+        assert_eq!(name, "project");
+
         let (service, _, _) =
             parse_original_command("git-receive-pack 'builder/project.git'").unwrap();
         assert!(matches!(service, GitService::ReceivePack));
@@ -204,7 +214,8 @@ mod tests {
     fn rejects_shells_commands_and_path_traversal() {
         assert!(parse_original_command("bash").is_err());
         assert!(parse_original_command("git-upload-pack '../outside.git'").is_err());
+        assert!(parse_original_command("git-upload-pack '/../../outside.git'").is_err());
+        assert!(parse_original_command("git-upload-pack '//builder/project.git'").is_err());
         assert!(parse_original_command("git-upload-pack 'builder/project.git;id'").is_err());
-        assert!(parse_original_command("git-upload-pack '/tmp/project.git'").is_err());
     }
 }

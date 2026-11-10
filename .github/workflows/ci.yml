@@ -27,6 +27,9 @@ jobs:
       - run: cargo check --workspace --all-targets
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo build -p riotgit-api
+      - name: Git smart HTTP round-trip
+        run: bash scripts/smoke-git-http.sh
 
   web:
     name: Web checks

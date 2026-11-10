@@ -124,7 +124,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "A valid JSON body is required." }, { status: 400 });
   }
 
-  if (!validateOwnerAndName(input.owner, input.name)) {
+  if (!isValidSegment(input.owner) || !isValidSegment(input.name)) {
     return NextResponse.json({ error: "A valid owner and repository name are required." }, { status: 400 });
   }
   const number = Number(input.number);

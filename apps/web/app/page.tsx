@@ -1,13 +1,13 @@
 const repositories = [
-  { name: "moonwitness", path: "bridge-allah/moonwitness", language: "Rust", updated: "12 min ago", branch: "main", status: "clean" },
-  { name: "riotworks", path: "bridge-allah/riotworks", language: "TypeScript", updated: "48 min ago", branch: "main", status: "review" },
-  { name: "ar-sy", path: "bjo163/ar-sy", language: "Rust", updated: "2 hours ago", branch: "dev", status: "clean" },
+  { name: "rift-engine", path: "riot-labs/rift-engine", language: "Rust", updated: "12 min ago", branch: "main", status: "clean" },
+  { name: "noise-lab", path: "riot-labs/noise-lab", language: "TypeScript", updated: "48 min ago", branch: "main", status: "review" },
+  { name: "ghost-protocol", path: "riot-labs/ghost-protocol", language: "Rust", updated: "2 hours ago", branch: "dev", status: "clean" },
 ];
 
 const events = [
-  { kind: "PUSH", title: "Pushed 4 commits to main", repo: "moonwitness", time: "12m" },
-  { kind: "REVIEW", title: "Review requested", repo: "riotworks", time: "48m" },
-  { kind: "TAG", title: "Created release candidate", repo: "ar-sy", time: "2h" },
+  { kind: "PUSH", title: "Pushed 4 commits to main", repo: "rift-engine", time: "12m" },
+  { kind: "REVIEW", title: "Review requested", repo: "noise-lab", time: "48m" },
+  { kind: "TAG", title: "Created release candidate", repo: "ghost-protocol", time: "2h" },
 ];
 
 export default function Home() {
@@ -44,7 +44,7 @@ export default function Home() {
           <section className="hero">
             <div className="hero-grain" />
             <div className="hero-copy">
-              <div className="eyebrow"><span className="live-dot" /> YOUR CODE. YOUR TERRITORY.</div>
+              <div className="eyebrow"><span className="live-dot" /> DESIGN PREVIEW / SAMPLE DATA</div>
               <h1>BREAK THE<br /><em>RULES.</em></h1>
               <p>Own your code. Build your network.<br />No permission required.</p>
               <div className="hero-actions">

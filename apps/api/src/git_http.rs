@@ -66,7 +66,10 @@ fn plain_response(status: StatusCode, message: &'static str) -> Response {
 fn unauthorized() -> Response {
     Response::builder()
         .status(StatusCode::UNAUTHORIZED)
-        .header(WWW_AUTHENTICATE, "Basic realm=\"R!OTGIT Git\", charset=\"UTF-8\"")
+        .header(
+            WWW_AUTHENTICATE,
+            "Basic realm=\"R!OTGIT Git\", charset=\"UTF-8\"",
+        )
         .header(CONTENT_TYPE, "text/plain; charset=utf-8")
         .body(Body::from("Git authentication required.\n"))
         .unwrap_or_else(|_| Response::new(Body::empty()))
@@ -86,9 +89,7 @@ fn valid_segment(value: &str) -> bool {
 }
 
 fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
-    (method == Method::GET
-        && path == "info/refs"
-        && query == "service=git-upload-pack")
+    (method == Method::GET && path == "info/refs" && query == "service=git-upload-pack")
         || (method == Method::POST
             && query.is_empty()
             && matches!(path, "git-upload-pack" | "git-receive-pack"))
@@ -173,9 +174,16 @@ pub(crate) async fn transport(
     };
     if !valid_segment(&owner)
         || !valid_segment(repo_name)
-        || !valid_operation(&parts.method, &service_path, parts.uri.query().unwrap_or(""))
+        || !valid_operation(
+            &parts.method,
+            &service_path,
+            parts.uri.query().unwrap_or(""),
+        )
     {
-        return plain_response(StatusCode::BAD_REQUEST, "Unsupported Git smart HTTP request.");
+        return plain_response(
+            StatusCode::BAD_REQUEST,
+            "Unsupported Git smart HTTP request.",
+        );
     }
 
     let storage_key = match sqlx::query_scalar::<_, String>(
@@ -257,7 +265,11 @@ pub(crate) async fn transport(
         ("user-agent", "HTTP_USER_AGENT"),
         ("accept", "HTTP_ACCEPT"),
     ] {
-        if let Some(value) = parts.headers.get(source).and_then(|value| value.to_str().ok()) {
+        if let Some(value) = parts
+            .headers
+            .get(source)
+            .and_then(|value| value.to_str().ok())
+        {
             command.env(target, value);
         }
     }
@@ -339,7 +351,11 @@ mod tests {
             "info/refs",
             "service=git-receive-pack"
         ));
-        assert!(!valid_operation(&Method::POST, "git-receive-pack", "other=value"));
+        assert!(!valid_operation(
+            &Method::POST,
+            "git-receive-pack",
+            "other=value"
+        ));
         assert!(!valid_operation(&Method::DELETE, "git-upload-pack", ""));
         assert!(!valid_segment("../outside"));
     }

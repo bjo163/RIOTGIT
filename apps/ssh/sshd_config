@@ -1,0 +1,32 @@
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/hostkeys/ssh_host_ed25519_key
+PidFile /run/sshd.pid
+LogLevel VERBOSE
+
+PermitRootLogin no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+UsePAM no
+
+AllowUsers git
+AuthorizedKeysFile none
+AuthorizedKeysCommand /usr/local/bin/riotgit-authorized-keys %u %f
+AuthorizedKeysCommandUser riotgit
+ExposeAuthInfo yes
+FingerprintHash sha256
+
+PermitTTY no
+DisableForwarding yes
+PermitTunnel no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitUserEnvironment no
+ForceCommand /usr/local/bin/riotgit-ssh
+AcceptEnv GIT_PROTOCOL
+PrintMotd no

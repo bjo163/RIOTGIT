@@ -19,6 +19,7 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 pub(crate) mod auth;
+mod git_browser;
 mod git_http;
 
 #[derive(Clone)]
@@ -705,6 +706,9 @@ async fn main() -> anyhow::Result<()> {
             get(list_repositories).post(create_repository),
         )
         .route("/api/v1/repositories/{owner}/{name}", get(get_repository))
+        .route("/api/v1/repositories/{owner}/{name}/tree", get(git_browser::tree))
+        .route("/api/v1/repositories/{owner}/{name}/blob", get(git_browser::blob))
+        .route("/api/v1/repositories/{owner}/{name}/commits", get(git_browser::commits))
         .route(
             "/api/v1/repositories/{owner}/{name}/access/{username}",
             put(grant_repository_access).delete(revoke_repository_access),

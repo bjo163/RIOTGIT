@@ -51,6 +51,7 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+      RIOTGIT_API_URL: http://api:8787
 
 volumes:
   riotgit-data:

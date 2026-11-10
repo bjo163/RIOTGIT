@@ -27,6 +27,7 @@ Recent changes add SSH-key management, login throttling, a same-origin web mutat
 - [x] Read/write permissions applied to Git Smart HTTP.
 - [x] Per-username login failure throttle (10 failed attempts in 15 minutes).
 - [x] SSH public-key registration/list/revocation API with key type/blob validation and SHA-256 fingerprints.
+- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook (end-to-end CI verification pending).
 - [x] Same-origin guard for mutating Next.js web API routes.
 - [x] Emergency instance-admin token.
 
@@ -59,7 +60,7 @@ Recent changes add SSH-key management, login throttling, a same-origin web mutat
 ## Remaining work
 
 ### Git and security
-- [ ] OpenSSH forced-command transport, authorized-keys integration, sshd deployment, and end-to-end SSH clone/push.
+- [ ] Complete end-to-end SSH CI verification, interoperability hardening, and deployment-specific host-key/security review.
 - [ ] Large-pack streaming/backpressure; Smart HTTP currently buffers bounded request/response bodies.
 - [ ] Git LFS.
 - [ ] IP-aware API rate limiting, reverse-proxy trust configuration, token rotation, security review, and full CSRF/proxy deployment review.
@@ -85,6 +86,7 @@ Recent changes add SSH-key management, login throttling, a same-origin web mutat
 - [ ] Container build/Compose smoke test in CI.
 - [ ] Load, soak, disk-full, crash-recovery, and large-pack tests.
 - [ ] Full security review and release checklist.
+- [ ] Verify SSH gateway host-key persistence, authorized-key revocation, no-shell restrictions, and hook execution on the target host.
 
 ## Important limitations
 

@@ -93,7 +93,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 - Smart HTTP is implemented; SSH is not.
 - Identity and repository-level grants work, but there is no organization/team model yet.
 - Protected-branch policy is not enforced yet.
-- Web shows live account/repository data, but does not yet browse repository contents or collaboration objects.
+- Web supports live repository data, tree/blob browsing, commit history, bounded diffs, and basic repository issue/comment workflows; pull requests and advanced collaboration are not implemented.
 - CI success verifies this foundation and smoke paths only. It does not make R!OTGIT a complete or production-hardened Git forge.
 - PostgreSQL, P2P/federation, runners, and AI remain planned.
 

@@ -34,14 +34,14 @@ The API listens on `127.0.0.1:8787` by default.
 - `GET /health/live` — process liveness.
 - `GET /health/ready` — database and storage readiness.
 - `GET /api/v1/meta` — public product/API metadata.
-- `GET /api/v1/repositories` — authenticated repository listing.
+- `POST /api/v1/auth/login` — create a bearer session.\n- `GET /api/v1/auth/me` — current identity.\n- `POST /api/v1/auth/logout` — revoke current session.\n- `POST /api/v1/admin/users` — create a user (admin only).\n- `PUT/DELETE /api/v1/repositories/{owner}/{name}/access/{username}` — grant/revoke repository access.\n- `GET /api/v1/repositories` — authenticated, permission-filtered repository listing.
 - `GET /api/v1/repositories/{owner}/{name}` — authenticated repository lookup.
 - `POST /api/v1/repositories` — authenticated bare repository creation.
 - `GET /git/{owner}/{repo}.git/info/refs?service=git-upload-pack` — Git fetch discovery.
 - `POST /git/{owner}/{repo}.git/git-upload-pack` — Git clone/fetch.
 - `POST /git/{owner}/{repo}.git/git-receive-pack` — Git push.
 
-Repository administration and Git smart HTTP currently use one instance-level token. Git HTTP accepts Bearer or Basic credentials (the token is the Basic password). This is a bootstrap guard, **not** the finished user/session/RBAC system. Every valid token currently has instance-admin access; do not share it among untrusted users.
+Local users now authenticate with Argon2 password hashes and opaque bearer sessions (7-day expiry, revocable). Set both `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD` on first run to bootstrap the first administrator; the password must be at least 12 bytes. Admins create users with `POST /api/v1/admin/users`. The instance-level `RIOTGIT_API_TOKEN` remains an emergency global-admin credential. Repository owners can grant `read`, `write`, or `admin` via `PUT /api/v1/repositories/{owner}/{name}/access/{username}` and revoke with `DELETE` on the same route. Git Smart HTTP accepts Bearer or Basic credentials (token as Basic password) and enforces read vs write grants.
 
 ## Create a repository
 

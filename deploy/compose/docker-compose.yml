@@ -10,6 +10,8 @@ services:
     environment:
       RIOTGIT_BIND: 0.0.0.0:8787
       RIOTGIT_API_TOKEN: ${RIOTGIT_API_TOKEN:?Set RIOTGIT_API_TOKEN in .env}
+      RIOTGIT_ADMIN_USERNAME: ${RIOTGIT_ADMIN_USERNAME:-}
+      RIOTGIT_ADMIN_PASSWORD: ${RIOTGIT_ADMIN_PASSWORD:-}
       RIOTGIT_DATABASE_PATH: /var/lib/riotgit/riotgit.db
       RIOTGIT_STORAGE_ROOT: /var/lib/riotgit/repositories
       RIOTGIT_GIT_BIN: git

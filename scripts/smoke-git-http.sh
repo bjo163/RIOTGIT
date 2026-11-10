@@ -5,7 +5,11 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 API_BIN="$ROOT_DIR/target/debug/riotgit-api"
 TMP_DIR="$(mktemp -d)"
 PORT="18787"
-TOKEN="riotgit-ci-smoke-token"
+ADMIN_TOKEN="riotgit-ci-emergency-token"
+ADMIN_USER="admin"
+ADMIN_PASSWORD="R!OTGIT-CI-Admin-1234"
+BUILDER_PASSWORD="Builder-CI-Password-123!"
+READER_PASSWORD="Reader-CI-Password-123!"
 API_PID=""
 
 cleanup() {
@@ -29,7 +33,9 @@ if [[ ! -x "$API_BIN" ]]; then
 fi
 
 export RIOTGIT_BIND="127.0.0.1:$PORT"
-export RIOTGIT_API_TOKEN="$TOKEN"
+export RIOTGIT_API_TOKEN="$ADMIN_TOKEN"
+export RIOTGIT_ADMIN_USERNAME="$ADMIN_USER"
+export RIOTGIT_ADMIN_PASSWORD="$ADMIN_PASSWORD"
 export RIOTGIT_DATABASE_PATH="$TMP_DIR/riotgit.db"
 export RIOTGIT_STORAGE_ROOT="$TMP_DIR/repositories"
 export RIOTGIT_GIT_BIN="git"
@@ -53,30 +59,102 @@ if [[ "$READY" -ne 1 ]]; then
   exit 1
 fi
 
-curl --fail --silent --show-error \
-  -X POST "http://127.0.0.1:$PORT/api/v1/repositories" \
-  -H "Authorization: Bearer $TOKEN" \
+BASE_URL="http://127.0.0.1:$PORT"
+ADMIN_TOKEN="$(curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"owner":"ci","name":"transport-smoke","visibility":"private"}' \
+  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASSWORD\"}" | jq -er '.access_token')"
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/admin/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"builder\",\"display_name\":\"CI Builder\",\"password\":\"$BUILDER_PASSWORD\",\"role\":\"member\"}" \
+  >/dev/null
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/admin/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"reader\",\"display_name\":\"CI Reader\",\"password\":\"$READER_PASSWORD\",\"role\":\"member\"}" \
+  >/dev/null
+
+BUILDER_TOKEN="$(curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"builder\",\"password\":\"$BUILDER_PASSWORD\"}" | jq -er '.access_token')"
+
+READER_TOKEN="$(curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"reader\",\"password\":\"$READER_PASSWORD\"}" | jq -er '.access_token')"
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/repositories" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"builder","name":"transport-smoke","visibility":"private"}' \
+  >/dev/null
+
+curl --fail --silent --show-error \
+  -X PUT "$BASE_URL/api/v1/repositories/builder/transport-smoke/access/reader" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"permission":"read"}' \
   >/dev/null
 
 SOURCE_DIR="$TMP_DIR/source"
-CLONE_DIR="$TMP_DIR/clone"
+CLONE_DIR="$TMP_DIR/reader-clone"
+REVOKED_CLONE_DIR="$TMP_DIR/revoked-clone"
 mkdir -p "$SOURCE_DIR"
 git -C "$SOURCE_DIR" init --initial-branch=main >/dev/null
 git -C "$SOURCE_DIR" config user.name "R!OTGIT CI"
 git -C "$SOURCE_DIR" config user.email "riotgit-ci@example.invalid"
-printf 'R!OTGIT Git smart HTTP smoke test\n' >"$SOURCE_DIR/README.md"
+printf 'R!OTGIT Git smart HTTP permission smoke test\n' >"$SOURCE_DIR/README.md"
 git -C "$SOURCE_DIR" add README.md
-git -C "$SOURCE_DIR" commit -m "test: initial transport smoke commit" >/dev/null
-git -C "$SOURCE_DIR" remote add origin "http://127.0.0.1:$PORT/git/ci/transport-smoke.git"
+git -C "$SOURCE_DIR" commit -m "test: initial permission smoke commit" >/dev/null
+git -C "$SOURCE_DIR" remote add origin "$BASE_URL/git/builder/transport-smoke.git"
 
 export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0="http.extraHeader"
-export GIT_CONFIG_VALUE_0="Authorization: Bearer $TOKEN"
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
 
 git -C "$SOURCE_DIR" push --quiet --set-upstream origin main
-git clone --quiet "http://127.0.0.1:$PORT/git/ci/transport-smoke.git" "$CLONE_DIR"
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $READER_TOKEN"
+curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null
+git clone --quiet "$BASE_URL/git/builder/transport-smoke.git" "$CLONE_DIR"
 cmp "$SOURCE_DIR/README.md" "$CLONE_DIR/README.md"
 
-echo "R!OTGIT Git smart HTTP smoke test passed: create -> push -> clone."
+printf 'reader write must be rejected\n' >>"$CLONE_DIR/README.md"
+git -C "$CLONE_DIR" config user.name "R!OTGIT Reader"
+git -C "$CLONE_DIR" config user.email "reader@example.invalid"
+git -C "$CLONE_DIR" add README.md
+git -C "$CLONE_DIR" commit -m "test: reader write must fail" >/dev/null
+if git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
+  echo "ERROR: read-only user was allowed to push." >&2
+  exit 1
+fi
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
+curl --fail --silent --show-error \
+  -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/access/reader" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $READER_TOKEN"
+if git clone --quiet "$BASE_URL/git/builder/transport-smoke.git" "$REVOKED_CLONE_DIR" >/dev/null 2>&1; then
+  echo "ERROR: revoked read permission still allowed cloning." >&2
+  exit 1
+fi
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/auth/logout" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null
+if curl --fail --silent "$BASE_URL/api/v1/auth/me" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null; then
+  echo "ERROR: logged-out session was still accepted." >&2
+  exit 1
+fi
+
+echo "R!OTGIT auth + Git HTTP smoke passed: bootstrap -> login -> grant read -> clone -> deny push -> revoke -> deny clone -> logout."

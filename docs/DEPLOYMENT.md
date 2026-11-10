@@ -17,8 +17,7 @@ It provides authenticated Git smart HTTP clone/fetch/push using one instance-lev
 
 - Docker Engine and Docker Compose plugin.
 - A reverse proxy with TLS for remote access.
-- A long random API token.
-- Persistent volume storage and a tested backup destination.
+- A long random API token.\n- Optional first-admin bootstrap username and password (both required together to create the first local administrator).\n- Persistent volume storage and a tested backup destination.
 
 ## Start
 
@@ -28,7 +27,7 @@ From repository root:
 cp .env.example .env
 ```
 
-Set `RIOTGIT_API_TOKEN` to a unique random value. For example, generate one with:
+Set `RIOTGIT_API_TOKEN` to a unique random value. For the first startup, also set `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD` in `.env` to create the first local admin; use a unique password of at least 12 bytes. These bootstrap credentials are only used when the database has no users. For the API emergency token, generate a unique random value with:
 
 ```bash
 openssl rand -hex 32
@@ -73,7 +72,7 @@ Do not edit or delete these files while the service is running. A backup must in
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `RIOTGIT_API_TOKEN` | Required | Instance-level admin bearer token |
+| `RIOTGIT_API_TOKEN` | Required | Instance-level emergency admin bearer token |\n| `RIOTGIT_ADMIN_USERNAME` | Optional on first boot | First local administrator username; set together with password |\n| `RIOTGIT_ADMIN_PASSWORD` | Optional on first boot | First local administrator password (12+ bytes) |
 | `RIOTGIT_API_PORT` | `8787` | Loopback host port |
 | `RIOTGIT_WEB_PORT` | `3000` | Loopback host port |
 | `RIOTGIT_BIND` | `127.0.0.1:8787` locally | API listener |
@@ -95,7 +94,7 @@ Do not roll back only the database or only repository storage.
 
 ## Security notes
 
-- API token is a temporary single-instance credential, not per-user RBAC.
+- `RIOTGIT_API_TOKEN` is a global emergency administrator credential; store it like a root secret.\n- Local accounts use Argon2 password hashes and revocable 7-day bearer sessions.\n- Repository grants support `read`, `write`, and `admin`; protected-branch checks are still not implemented.
 - Keep services behind a trusted proxy and firewall.
 - Keep the named data volume private and persistent.
 - The container runs as a non-root user and uses a read-only root filesystem.

@@ -214,7 +214,7 @@ export default function BranchProtectionPage() {
         <aside className="branch-protection-warning">
           <strong>TRANSPORT COVERAGE / READ BEFORE ENABLING</strong>
           <p>
-            Rules are enforced for authenticated Git Smart HTTP pushes and the optional SSH gateway's receive-pack hook. SSH gateway availability still depends on enabling the ssh Compose profile and completing its integration verification.
+            Rules are enforced for authenticated Git Smart HTTP pushes and the optional SSH gateway&apos;s receive-pack hook. SSH gateway availability still depends on enabling the ssh Compose profile and completing its integration verification.
             A rule requiring a pull request blocks direct pushes, but the R!OTGIT pull-request merge engine is not available yet.
             Keep a recovery/admin path outside protected refs until that workflow ships.
           </p>

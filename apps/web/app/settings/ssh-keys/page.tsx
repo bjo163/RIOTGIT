@@ -29,8 +29,6 @@ export default function SshKeysPage() {
   const [notice, setNotice] = useState("");
 
   const loadKeys = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError("");
     try {
       const response = await fetch("/api/user/ssh-keys", {
         cache: "no-store",
@@ -165,7 +163,7 @@ export default function SshKeysPage() {
         <section className="ssh-key-list panel">
           <div className="panel-heading">
             <div><span className="eyebrow muted">TRUSTED DEVICES / 02</span><h2>REGISTERED KEYS</h2></div>
-            <button type="button" className="text-link" onClick={() => void loadKeys()}>↻ REFRESH</button>
+            <button type="button" className="text-link" onClick={() => { setLoading(true); setError(""); void loadKeys(); }}>↻ REFRESH</button>
           </div>
           {loading ? (
             <div className="ssh-empty-state">READING YOUR KEY REGISTRY...</div>

@@ -54,7 +54,7 @@ export default function SshKeysPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadKeys(controller.signal);
+    void Promise.resolve().then(() => loadKeys(controller.signal));
     return () => controller.abort();
   }, [loadKeys]);
 

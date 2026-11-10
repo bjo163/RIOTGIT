@@ -18,9 +18,10 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git openssh-server \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --home-dir /var/lib/riotgit --create-home --shell /bin/bash riotgit \
+    && groupadd --gid 10001 riotgit \
+    && useradd --system --uid 10001 --gid 10001 --home-dir /var/lib/riotgit --create-home --shell /bin/bash riotgit \
     && useradd --system --uid 10001 --non-unique --gid 10001 --home-dir /var/lib/riotgit --no-create-home --shell /bin/bash git \
-    && mkdir -p /etc/ssh/hostkeys /usr/local/lib/riotgit/hooks /run/sshd \
+    && mkdir -p /etc/ssh/hostkeys /usr/local/lib/riotgit/hooks /run/sshd /var/empty \
     && chown -R riotgit:riotgit /var/lib/riotgit
 
 COPY --from=builder /src/target/release/riotgit-authorized-keys /usr/local/bin/riotgit-authorized-keys

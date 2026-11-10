@@ -308,7 +308,10 @@ pub(crate) async fn tree(
     .await?;
 
     let mut entries = Vec::new();
-    for record in output.split(|byte| *byte == 0).filter(|record| !record.is_empty()) {
+    for record in output
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
         let Some(tab_index) = record.iter().position(|byte| *byte == b'\t') else {
             continue;
         };
@@ -354,7 +357,9 @@ pub(crate) async fn blob(
     let repository = load_repository(&state, &headers, &owner, &name).await?;
     let reference = query.reference.unwrap_or_else(|| "HEAD".to_owned());
     if !valid_repository_path(&query.path) || query.path.is_empty() {
-        return Err(ApiError::bad_request("A valid repository file path is required."));
+        return Err(ApiError::bad_request(
+            "A valid repository file path is required.",
+        ));
     }
 
     let commit = resolve_commit(&state, &repository, &reference).await?;

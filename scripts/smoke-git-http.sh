@@ -67,6 +67,39 @@ curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/admin/users" -H "Aut
 BUILDER_TOKEN="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/auth/login" -H "Content-Type: application/json" -d "{\"username\":\"builder\",\"password\":\"$BUILDER_PASSWORD\"}" | jq -er '.access_token')"
 READER_TOKEN="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/auth/login" -H "Content-Type: application/json" -d "{\"username\":\"reader\",\"password\":\"$READER_PASSWORD\"}" | jq -er '.access_token')"
 
+# SSH key management validates key type/blob, stores a fingerprint, and supports revocation.
+ssh-keygen -q -t ed25519 -N "" -f "$TMP_DIR/riotgit-ci-ssh"
+SSH_PUBLIC_KEY="$(cat "$TMP_DIR/riotgit-ci-ssh.pub")"
+SSH_KEY_ID="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/user/ssh-keys" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg public_key "$SSH_PUBLIC_KEY" '{public_key:$public_key}')" | jq -er '.id')"
+curl --fail --silent --show-error "$BASE_URL/api/v1/user/ssh-keys" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" | jq -e --arg id "$SSH_KEY_ID" 'any(.[]; .id == $id)' >/dev/null
+curl --fail --silent --show-error -X DELETE "$BASE_URL/api/v1/user/ssh-keys/$SSH_KEY_ID" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+
+# Per-username throttling blocks repeated failed sign-in attempts.
+curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/admin/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"username":"rate-limited","display_name":"Rate Limited","password":"Rate-Limit-Test-Password-123!","role":"member"}' >/dev/null
+for _ in $(seq 1 10); do
+  FAILED_LOGIN_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    -X POST "$BASE_URL/api/v1/auth/login" -H "Content-Type: application/json" \
+    -d '{"username":"rate-limited","password":"wrong-password"}')"
+  if [[ "$FAILED_LOGIN_STATUS" != "401" ]]; then
+    echo "ERROR: failed login returned $FAILED_LOGIN_STATUS instead of 401 before the threshold." >&2
+    exit 1
+  fi
+done
+THROTTLED_LOGIN_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  -X POST "$BASE_URL/api/v1/auth/login" -H "Content-Type: application/json" \
+  -d '{"username":"rate-limited","password":"Rate-Limit-Test-Password-123!"}')"
+if [[ "$THROTTLED_LOGIN_STATUS" != "429" ]]; then
+  echo "ERROR: login throttling returned $THROTTLED_LOGIN_STATUS instead of 429." >&2
+  exit 1
+fi
+
+
 curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"owner":"builder","name":"transport-smoke","visibility":"private"}' >/dev/null
 curl --fail --silent --show-error -X PUT "$BASE_URL/api/v1/repositories/builder/transport-smoke/access/reader" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"permission":"read"}' >/dev/null
 
@@ -191,4 +224,4 @@ if curl --fail --silent "$BASE_URL/api/v1/auth/me" -H "Authorization: Bearer $RE
   exit 1
 fi
 
-echo "R!OTGIT smoke passed: auth -> issues/labels/milestones -> branch protection -> PR approval/merge -> diff -> Git clone/push -> revoke -> logout."
+echo "R!OTGIT smoke passed: auth/throttle/SSH keys -> issues/labels/milestones -> branch protection -> PR approval/merge -> diff -> Git clone/push -> revoke -> logout."

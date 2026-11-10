@@ -12,7 +12,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use tokio::{io::AsyncReadExt, process::Command, time::timeout};
-use tracing::{error, warn};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{ApiError, AppState};

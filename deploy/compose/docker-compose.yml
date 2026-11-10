@@ -32,6 +32,32 @@ services:
       retries: 3
       start_period: 10s
 
+  ssh:
+    profiles: ["ssh"]
+    build:
+      context: ../..
+      dockerfile: apps/ssh/Dockerfile
+    image: riotgit/ssh:local
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      RIOTGIT_DATABASE_PATH: /var/lib/riotgit/riotgit.db
+      RIOTGIT_STORAGE_ROOT: /var/lib/riotgit/repositories
+      RIOTGIT_GIT_BIN: git
+    volumes:
+      - riotgit-data:/var/lib/riotgit
+      - riotgit-ssh-hostkeys:/etc/ssh/hostkeys
+    ports:
+      - "127.0.0.1:${RIOTGIT_SSH_PORT:-2222}:22"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run/sshd:size=8m,noexec,nosuid
+      - /tmp:size=16m,noexec,nosuid
+
   web:
     build:
       context: ../..

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">R!OTGIT symbol</title>
+  <path fill="#D7FF38" d="M16 12h57c25 0 40 13 40 35 0 17-9 29-25 34l25 35H79L58 85H43v31H16V12Zm27 24v25h27c10 0 15-4 15-13s-5-12-15-12H43Z"/>
+  <path fill="#FF5A1F" d="M91 8h22l-5 45H94L91 8Z"/>
+  <circle cx="103" cy="67" r="11" fill="#FF5A1F"/>
+  <path fill="#111111" d="M6 7h8v114H6z" opacity=".7"/>
+</svg>

@@ -53,6 +53,15 @@ The API listens on `127.0.0.1:8787` by default.
 - `DELETE /api/v1/repositories/{owner}/{name}/branch-protection?branch_name=main` — remove a rule (repository admin).
 
 Branch protection is currently enforced on Git Smart HTTP receive-pack. SSH transport is not implemented yet.
+
+Pull request routes:
+- `GET /api/v1/repositories/{owner}/{name}/pulls` — list pull requests.
+- `POST .../pulls` — create a pull request from two local branches; head/base commit SHAs are captured at creation.
+- `GET .../pulls/{number}` and `PUT .../pulls/{number}` — read, close, or reopen a pull request.
+- `GET .../pulls/{number}/reviews` and `POST .../pulls/{number}/reviews` — list and submit review decisions.
+- `POST .../pulls/{number}/merge` — merge a clean pull request using a merge commit and compare-and-swap ref update.
+
+When the target branch has a `require_pull_request` protection rule, merge requires at least one current approval from a reviewer other than the pull request author. Head/base refs must still match the captured SHAs; stale pull requests and conflicts are rejected. Merge state is journaled as `merging` so a later read/merge request can reconcile a process interruption. This is a first-party R!OTGIT API, not a claim of GitHub REST compatibility.
 - `PUT /api/v1/repositories/{owner}/{name}/access/{username}` — grant `read`, `write`, or `admin`.
 - `DELETE /api/v1/repositories/{owner}/{name}/access/{username}` — revoke a grant.
 - `GET /git/{owner}/{repo}.git/info/refs?service=git-upload-pack` — fetch/clone discovery.

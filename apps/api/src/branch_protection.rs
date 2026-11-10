@@ -57,14 +57,15 @@ pub(crate) fn valid_branch_name(value: &str) -> bool {
         || value.contains("..")
         || value.contains("//")
         || value.contains("@{")
-        || value.split('/').any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"))
+        || value
+            .split('/')
+            .any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"))
     {
         return false;
     }
 
     value.chars().all(|character| {
-        character.is_ascii_alphanumeric()
-            || matches!(character, '/' | '-' | '_' | '.')
+        character.is_ascii_alphanumeric() || matches!(character, '/' | '-' | '_' | '.')
     })
 }
 
@@ -105,7 +106,11 @@ pub(crate) async fn list_rules(
     )
     .await
     {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, "not_found", "Repository not found."));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "Repository not found.",
+        ));
     }
 
     let rules = sqlx::query_as::<_, BranchProtectionRule>(
@@ -134,7 +139,8 @@ pub(crate) async fn set_rule(
 ) -> Result<(StatusCode, Json<BranchProtectionRule>), ApiError> {
     let actor = crate::auth::authenticate(&headers, &state).await?;
     let repository = repository_context(&state, &owner, &name).await?;
-    if !crate::auth::can_manage_repository(&state, &actor, &repository.id, &repository.owner).await {
+    if !crate::auth::can_manage_repository(&state, &actor, &repository.id, &repository.owner).await
+    {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "forbidden",
@@ -209,10 +215,8 @@ pub(crate) async fn delete_rule(
         return Err(ApiError::bad_request("Branch name is invalid."));
     }
 
-    sqlx::query(
-        "DELETE FROM branch_protection_rules WHERE repository_id = ? AND branch_name = ?",
-    )
-    .bind(&repository.id)
+    sqlx::query("DELETE FROM branch_protection_rules WHERE repository_id = ? AND branch_name = ?")
+        .bind(&repository.id)
     .bind(&query.branch_name)
     .execute(&state.pool)
     .await

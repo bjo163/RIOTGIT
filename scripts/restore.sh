@@ -57,8 +57,8 @@ read -r -p "Type RESTORE to continue: " CONFIRM
 [[ "$CONFIRM" == "RESTORE" ]] || fail "Restore cancelled."
 
 log "Stopping API and web services..."
-docker compose -f "$COMPOSE_FILE" stop api web
 RESTART_SERVICES=1
+docker compose -f "$COMPOSE_FILE" stop api web
 
 log "Creating pre-restore safety snapshot..."
 docker run --rm --network none \

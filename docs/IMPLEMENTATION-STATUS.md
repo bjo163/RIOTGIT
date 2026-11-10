@@ -83,7 +83,8 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 - [x] Repository Issues: create/list/update/close, comments, repository access checks, and browser tracker UI.
 - [x] Repository labels and issue milestones in API and UI.
 - [ ] Assignees, notifications, and a richer issue timeline.
-- [ ] CLI/TUI.
+- [x] Rust CLI: login, whoami, repository list/create/clone, SSH key list/add/revoke.
+- [ ] Interactive TUI and OS credential-vault integration.
 
 ### Automation and network
 - [ ] Durable background queue and signed webhook delivery.

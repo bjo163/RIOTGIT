@@ -26,6 +26,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 
 ### Identity and access
 - [x] First-run administrator bootstrap from environment variables.
+- [x] SSH public key registration/list/revocation API with key-blob validation and SHA-256 fingerprints.
 - [x] Argon2 password hashing and verification.
 - [x] User login and 7-day opaque bearer sessions.
 - [x] Session revocation via logout.
@@ -65,11 +66,12 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 ## Remaining work
 
 ### Git and security
-- [ ] OpenSSH forced-command Git transport and SSH key registration/revocation.
+- [ ] OpenSSH forced-command Git transport and sshd deployment (key registration/revocation API is implemented).
 - [x] Branch protection rules API and server-side receive-pack enforcement for Git Smart HTTP (PR-required direct pushes, deletion guard, and non-fast-forward guard).
 - [ ] Large pack streaming/backpressure; current HTTP gateway buffers bounded request/response bodies.
 - [ ] Git LFS.
-- [ ] Login/API rate limiting, origin/CSRF defense review, token rotation, and security hardening.
+- [x] Per-username login failure throttling (10 failures / 15 minutes).
+- [ ] IP-aware API rate limiting, web Origin/CSRF defense, token rotation, and full security hardening.
 - [ ] PostgreSQL adapter and cross-database integration suite.
 
 ### Forge collaboration

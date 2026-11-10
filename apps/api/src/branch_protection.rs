@@ -204,7 +204,8 @@ pub(crate) async fn delete_rule(
 ) -> Result<StatusCode, ApiError> {
     let actor = crate::auth::authenticate(&headers, &state).await?;
     let repository = repository_context(&state, &owner, &name).await?;
-    if !crate::auth::can_manage_repository(&state, &actor, &repository.id, &repository.owner).await {
+    if !crate::auth::can_manage_repository(&state, &actor, &repository.id, &repository.owner).await
+    {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "forbidden",

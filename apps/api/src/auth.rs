@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 use axum::{
     Json,
@@ -10,6 +10,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
 };
 use serde::{Deserialize, Serialize};
+use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, SqlitePool};
 use subtle::ConstantTimeEq;

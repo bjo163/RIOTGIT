@@ -381,14 +381,14 @@ pub(crate) async fn login(
     };
     if user.status != "active" || !verify_password(user.password_hash, input.password).await {
         sqlx::query("INSERT INTO login_attempts (id, username_digest, succeeded) VALUES (?, ?, 0)")
-        .bind(Uuid::new_v4().simple().to_string())
-        .bind(&username_digest)
-        .execute(&state.pool)
-        .await
-        .map_err(|error| {
-            error!(%error, "failed to record unsuccessful login");
-            ApiError::internal()
-        })?;
+            .bind(Uuid::new_v4().simple().to_string())
+            .bind(&username_digest)
+            .execute(&state.pool)
+            .await
+            .map_err(|error| {
+                error!(%error, "failed to record unsuccessful login");
+                ApiError::internal()
+            })?;
         return Err(ApiError::unauthorized());
     }
 

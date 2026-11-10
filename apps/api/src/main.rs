@@ -19,6 +19,7 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 pub(crate) mod auth;
+mod branch_protection;
 mod collaboration;
 mod git_browser;
 mod git_http;
@@ -726,6 +727,12 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/v1/repositories/{owner}/{name}/milestones",
             get(collaboration::list_milestones).post(collaboration::create_milestone),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/branch-protection",
+            get(branch_protection::list_rules)
+                .post(branch_protection::set_rule)
+                .delete(branch_protection::delete_rule),
         )
         .route(
             "/api/v1/repositories/{owner}/{name}/issues/{number}/labels",

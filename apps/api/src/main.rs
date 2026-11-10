@@ -1,10 +1,6 @@
 use std::{env, net::SocketAddr};
 
-use axum::{
-    Json, Router,
-    http::StatusCode,
-    routing::get,
-};
+use axum::{Json, Router, http::StatusCode, routing::get};
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tracing::{info, warn};

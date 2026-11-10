@@ -51,6 +51,7 @@ jobs:
   ssh:
     name: OpenSSH Git transport
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Configure isolated CI instance
@@ -63,8 +64,23 @@ jobs:
             echo "RIOTGIT_WEB_PORT=3000"
             echo "RIOTGIT_SSH_PORT=2222"
           } > .env
-      - name: Build and start API plus SSH gateway
-        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up --build -d api ssh
+      - name: Build API and SSH images
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh build api ssh
+      - name: Start API service
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --no-build api
+      - name: Wait for API readiness
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8787/health/ready >/dev/null; then
+              echo "API is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env logs --tail=160 api
+          exit 1
+      - name: Start restricted SSH gateway
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build ssh
       - name: Verify SSH clone, push, permissions, and revocation
         run: |
           set -a

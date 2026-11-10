@@ -9,6 +9,11 @@ TOKEN="riotgit-ci-smoke-token"
 API_PID=""
 
 cleanup() {
+  status=$?
+  if [[ "$status" -ne 0 && -f "$TMP_DIR/api.log" ]]; then
+    echo "---- R!OTGIT API log ----" >&2
+    cat "$TMP_DIR/api.log" >&2
+  fi
   if [[ -n "$API_PID" ]]; then
     kill "$API_PID" 2>/dev/null || true
     wait "$API_PID" 2>/dev/null || true

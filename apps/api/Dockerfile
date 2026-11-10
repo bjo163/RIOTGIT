@@ -4,6 +4,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.toml
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 COPY apps/cli/Cargo.toml apps/cli/Cargo.toml
+COPY apps/cli/src apps/cli/src
 COPY apps/api/migrations apps/api/migrations
 COPY apps/api/src apps/api/src
 RUN cargo build --release -p riotgit-api

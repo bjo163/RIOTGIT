@@ -111,7 +111,7 @@ pub async fn can_access(pool: &SqlitePool, actor: &SshActor, repository: &SshRep
 }
 
 pub fn storage_path(storage_key: &str) -> Result<PathBuf> {
-    if storage_key.len() != 35 || !storage_key.ends_with(".git")
+    if storage_key.len() != 36 || !storage_key.ends_with(".git")
         || !storage_key[..32].bytes().all(|b| b.is_ascii_hexdigit()) {
         anyhow::bail!("Repository storage key is invalid");
     }

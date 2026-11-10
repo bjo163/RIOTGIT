@@ -1,6 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::{Engine as _, engine::general_purpose::{STANDARD, STANDARD_NO_PAD}};
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -9,6 +8,10 @@ use axum::{
     Json,
     extract::State,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
 };
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -595,7 +598,6 @@ pub(crate) async fn create_user(
     Ok((StatusCode::CREATED, Json(user)))
 }
 
-
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub(crate) struct SshKeySummary {
     pub(crate) id: String,
@@ -628,10 +630,14 @@ fn parse_ssh_public_key(value: &str) -> Result<(String, String, String), &'stati
             | "sk-ecdsa-sha2-nistp256@openssh.com"
             | "ssh-rsa"
     ) {
-        return Err("Only Ed25519, NIST P-256 ECDSA, security-key, and RSA public keys are accepted.");
+        return Err(
+            "Only Ed25519, NIST P-256 ECDSA, security-key, and RSA public keys are accepted.",
+        );
     }
     if comment.len() > 256 || comment.chars().any(char::is_control) {
-        return Err("Public key comment must be 256 characters or fewer and contain no control characters.");
+        return Err(
+            "Public key comment must be 256 characters or fewer and contain no control characters.",
+        );
     }
 
     let blob = STANDARD
@@ -651,10 +657,7 @@ fn parse_ssh_public_key(value: &str) -> Result<(String, String, String), &'stati
         return Err("Public key type does not match its encoded key data.");
     }
 
-    let fingerprint = format!(
-        "SHA256:{}",
-        STANDARD_NO_PAD.encode(Sha256::digest(&blob))
-    );
+    let fingerprint = format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(&blob)));
     Ok((key_type.to_owned(), encoded.to_owned(), fingerprint))
 }
 
@@ -702,7 +705,12 @@ pub(crate) async fn create_ssh_key(
 
     let (key_type, key_blob, fingerprint) =
         parse_ssh_public_key(input.public_key.trim()).map_err(ApiError::bad_request)?;
-    let comment = input.public_key.split_whitespace().skip(2).collect::<Vec<_>>().join(" ");
+    let comment = input
+        .public_key
+        .split_whitespace()
+        .skip(2)
+        .collect::<Vec<_>>()
+        .join(" ");
     let key = sqlx::query_as::<_, SshKeySummary>(
         "INSERT INTO ssh_keys (id, user_id, key_type, key_blob, fingerprint, comment)
          VALUES (?, ?, ?, ?, ?, ?)

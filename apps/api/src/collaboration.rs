@@ -304,7 +304,7 @@ pub(crate) async fn update_issue(
              END,
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
          WHERE repository_id = ? AND number = ?
-         RETURNING id, number, title, body, state, author_id, created_at, updated_at, closed_at",
+         RETURNING id, number, title, body, state, author_id, created_at, updated_at, closed_at, milestone_id",
     )
     .bind(input.title.map(|value| value.trim().to_owned()))
     .bind(input.body)

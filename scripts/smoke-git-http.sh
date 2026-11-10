@@ -104,6 +104,15 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0="http.extraHeader"
 export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
 git -C "$SOURCE_DIR" push --quiet --set-upstream origin main
+printf 'R!OTGIT diff smoke marker\n' >"$SOURCE_DIR/DIFF.txt"
+git -C "$SOURCE_DIR" add DIFF.txt
+git -C "$SOURCE_DIR" commit -m "test: add diff smoke marker" >/dev/null
+git -C "$SOURCE_DIR" push --quiet origin main
+DIFF_OUTPUT="$(curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke/diff?base=HEAD%7E1&head=HEAD" -H "Authorization: Bearer $BUILDER_TOKEN" | jq -er '.diff')"
+if [[ "$DIFF_OUTPUT" != *"R!OTGIT diff smoke marker"* ]]; then
+  echo "ERROR: repository diff endpoint did not return the pushed change." >&2
+  exit 1
+fi
 
 export GIT_CONFIG_VALUE_0="Authorization: Bearer $READER_TOKEN"
 curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke" -H "Authorization: Bearer $READER_TOKEN" >/dev/null

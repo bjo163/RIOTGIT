@@ -4,7 +4,7 @@
 
 The Compose profile runs the Rust API and Next.js web application on one machine. It now includes SQLite metadata, local identity/sessions, repository-level permissions, native bare Git storage, authenticated Git Smart HTTP, browser code views, Issues/labels/milestones, Pull Requests/reviews/merge, and branch protection for Smart HTTP pushes.
 
-This is an early self-hosted release foundation, not a claim of complete production hardening. OpenSSH Git transport, large-pack streaming, Git LFS, PostgreSQL, CI runners, federation/P2P, and AI agent execution are not enabled.
+This is an early self-hosted release foundation, not a claim of complete production hardening. A restricted OpenSSH gateway is available through the optional `ssh` Compose profile; it requires the separate SSH integration smoke test and deployment-specific host-key/firewall review. Large-pack streaming, Git LFS, PostgreSQL, CI runners, federation/P2P, and AI agent execution are not enabled.
 
 ## Requirements
 
@@ -39,8 +39,9 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up --build -
 Host ports bind to loopback by default:
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:8787`
+- Optional SSH: `127.0.0.1:2222` (enable the `ssh` profile)
 
-Next.js talks to the API over the internal Compose network (`http://api:8787`). Put a trusted TLS reverse proxy in front of the web service. Do not expose the API port directly to the public internet.
+Next.js talks to the API over the internal Compose network (`http://api:8787`). Put a trusted TLS reverse proxy in front of the web service. Do not expose the API port directly to the public internet. The SSH port is loopback-bound by default; remote Git-over-SSH requires an explicit firewall/port publication change. Verify the server host-key fingerprint through a trusted channel before accepting it.
 
 ## Smoke test
 
@@ -50,7 +51,7 @@ curl --fail http://127.0.0.1:8787/health/ready
 curl --fail http://127.0.0.1:8787/api/v1/meta
 ```
 
-Open `http://127.0.0.1:3000/login`. Create repositories and collaborate through the web interface or standard Git over authenticated HTTPS. See [API README](../apps/api/README.md) and [CLI guide](../apps/cli/README.md).
+Open `http://127.0.0.1:3000/login`. Create repositories and collaborate through the web interface or standard Git over authenticated HTTPS. To enable SSH, run `docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up --build -d api ssh`; see [SSH gateway guide](../apps/ssh/README.md). See also [API README](../apps/api/README.md) and [CLI guide](../apps/cli/README.md).
 
 ## Persistent data
 
@@ -104,7 +105,7 @@ Do not roll back only the database or only repository storage. Migrations are ve
 - Local account passwords use Argon2 hashes; bearer sessions are revocable and expire after seven days.
 - Browser sessions use HttpOnly/SameSite cookies and mutating web API calls are guarded by the Next.js same-origin proxy.
 - Login failures are throttled per normalized username; IP-aware rate limiting and proxy-trust hardening remain outstanding.
-- SSH public keys can be registered, listed, and revoked, but registering a key does not enable SSH clone/push. OpenSSH forced-command transport is still outstanding.
+- SSH public keys can be registered, listed, and revoked. The optional gateway applies a forced command and disables interactive shell/forwarding. Keep the SSH profile disabled until its end-to-end smoke test passes; validate the persisted host-key fingerprint before public exposure.
 - Branch protection is enforced for Git Smart HTTP receive-pack; do not assume it covers SSH until SSH transport is implemented.
 - Containers run as non-root with read-only root filesystems and loopback host bindings.
 - CI runner, federation/P2P, and AI execution services are intentionally absent from this Compose profile.

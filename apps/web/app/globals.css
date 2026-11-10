@@ -316,3 +316,39 @@ button { cursor: pointer; }
   .commit-row { grid-template-columns: 24px minmax(0,1fr); }
   .commit-row code { display: none; }
 }
+
+
+/* Issue tracker — loud frame, readable work surface. */
+.repo-tab small { margin-left: 5px; color: var(--hazard-orange); font: 8px var(--font-mono); }
+.issues-workspace { padding: 17px; }
+.issue-create { display: grid; gap: 8px; padding: 16px; border: 1px solid #414141; background: #131313; }
+.issue-create-heading { display: grid; gap: 4px; margin-bottom: 5px; }
+.issue-create-heading .eyebrow { color: #777; }
+.issue-create-heading strong { font: 800 22px/.95 var(--font-display); }
+.issue-create label { margin-top: 4px; color: #888; font: 8px var(--font-mono); letter-spacing: 1px; }
+.issue-create input, .issue-create textarea { width: 100%; border: 1px solid #3a3a3a; border-radius: 0; background: #1a1a1a; color: var(--concrete); padding: 10px 11px; font: 11px var(--font-ui); }
+.issue-create textarea { min-height: 85px; resize: vertical; line-height: 1.5; }
+.issue-create input:focus, .issue-create textarea:focus { outline: 2px solid var(--riot-lime); outline-offset: 1px; }
+.issue-submit { justify-self: start; margin-top: 5px; min-height: 33px; }
+.issue-submit:disabled { opacity: .45; cursor: not-allowed; }
+.issues-heading { display: flex; align-items: center; gap: 14px; padding: 19px 2px 10px; }
+.issues-heading strong { font: 800 20px/.9 var(--font-display); }
+.issues-heading span { color: #777; font: 8px var(--font-mono); }
+.issues-heading button { margin-left: auto; border: 0; background: transparent; }
+.issue-row { display: flex; align-items: flex-start; gap: 12px; padding: 14px 10px; border-top: 1px solid #2d2d2d; }
+.issue-state { flex: none; width: 26px; height: 26px; display: grid; place-items: center; background: #232719; color: var(--riot-lime); }
+.issue-state.closed { color: var(--steel); background: #222; }
+.issue-main { min-width: 0; flex: 1; }
+.issue-main strong, .issue-main small { display: block; }
+.issue-main strong { color: var(--concrete); font-size: 11px; line-height: 1.5; }
+.issue-main small { margin-top: 4px; color: #777; font: 8px var(--font-mono); }
+.issue-main p { margin: 8px 0 0; color: #aaa; font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.issue-toggle { flex: none; border: 1px solid #444; background: #1b1b1b; padding: 7px 8px; }
+@media (max-width: 520px) {
+  .repo-tab { padding-inline: 9px; font-size: 8px; }
+  .issues-workspace { padding: 9px; }
+  .issue-row { gap: 8px; padding-inline: 3px; }
+  .issue-toggle { font-size: 7px; padding: 6px; }
+  .issues-heading { gap: 8px; }
+  .issues-heading span { font-size: 7px; }
+}

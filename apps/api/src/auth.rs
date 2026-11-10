@@ -368,9 +368,7 @@ pub(crate) async fn login(
     })?;
 
     let Some(user) = user else {
-        sqlx::query(
-            "INSERT INTO login_attempts (id, username_digest, succeeded) VALUES (?, ?, 0)",
-        )
+        sqlx::query("INSERT INTO login_attempts (id, username_digest, succeeded) VALUES (?, ?, 0)")
         .bind(Uuid::new_v4().simple().to_string())
         .bind(&username_digest)
         .execute(&state.pool)

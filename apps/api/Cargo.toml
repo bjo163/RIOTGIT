@@ -1,6 +1,6 @@
 [package]
 name = "riotgit-api"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,13 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+subtle.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+uuid.workspace = true

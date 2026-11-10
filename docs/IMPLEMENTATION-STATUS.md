@@ -2,56 +2,66 @@
 
 Last updated: 2026-11-11
 
-## Implemented in repository
+## Implemented and committed
 
-- [x] Product narrative and positioning.
-- [x] Extreme visual identity, color tokens, typography roles, logo direction.
-- [x] Initial symbol and wordmark SVG source assets.
-- [x] Architecture baseline and security baseline.
-- [x] Delivery roadmap and contribution standards.
-- [x] Rust workspace with minimal Axum API service.
-- [x] API process liveness and readiness endpoints.
-- [x] API metadata endpoint.
-- [x] Next.js App Router project scaffold.
-- [x] Responsive R!OTGIT cockpit design preview.
-- [x] Reduced-motion CSS behavior and system font fallbacks.
-- [x] GitHub Actions quality workflow.
-- [x] Issue and pull request templates.
-- [x] 16 implementation issues created.
+- [x] Product narrative, positioning, brand identity, logo SVGs, and product design system.
+- [x] Architecture baseline, threat model, delivery roadmap, contribution standards, and issue templates.
+- [x] Rust workspace and Axum API bootstrap.
+- [x] SQLite database initialization with versioned migration.
+- [x] Database-backed repository metadata.
+- [x] Native Git bare-repository initialization with generated opaque storage IDs and staging activation.
+- [x] Bearer-token guard for repository administration endpoints.
+- [x] Repository create, list, and lookup API.
+- [x] Liveness and database/storage readiness endpoints.
+- [x] Next.js App Router cockpit design preview.
+- [x] GitHub Actions Rust and web quality workflow.
+
+## Verified at foundation stage
+
+The starter UI/API commit passed GitHub Actions:
+- Rust formatting, check, Clippy, and tests.
+- Web dependency install, TypeScript, ESLint, and Next.js production build.
+
+See the CI run: https://github.com/bjo163/RIOTGIT/actions/runs/42872536139
+
+## Implemented in the current Git Core increment
+
+Pending CI verification after this update:
+- SQLite-backed repository metadata.
+- Native Git bare repository creation via controlled argument-based process invocation.
+- Duplicate repository conflict response.
+- Name validation against traversal and unsafe path characters.
+- Configurable storage/database/Git executable.
+- API token guard for repository management.
 
 ## Not yet implemented
 
-- [ ] Database connectivity and schema migrations.
-- [ ] Accounts, sessions, tokens, SSH key registration, RBAC.
-- [ ] Repository metadata and bare Git storage lifecycle.
-- [ ] Authenticated SSH and smart HTTP transport.
-- [ ] Live repository data in the web app; current cockpit uses clearly labeled sample data.
-- [ ] Code browser, commits, diffs, issues, pull requests, reviews.
+- [ ] Per-user authentication, sessions, SSH key lifecycle, organization/team RBAC.
+- [ ] Git SSH forced-command transport.
+- [ ] Git smart HTTP transport.
+- [ ] Git LFS.
+- [ ] Live web API integration and real repository views.
+- [ ] Code tree/blob/commit/diff browser.
+- [ ] Issues, pull requests, reviews, branch protections, merge engine.
 - [ ] CLI/TUI.
-- [ ] Durable background queue and webhooks.
-- [ ] Isolated CI runners.
-- [ ] Mirror, federation, and Radicle/P2P adapter.
-- [ ] AI provider gateway and scoped agents.
-- [ ] Production Compose deployment, backup/restore, and operational runbooks.
+- [ ] Durable jobs, webhooks, isolated CI runners.
+- [ ] Mirrors, federation, Radicle/P2P.
+- [ ] AI gateway and scoped agents.
+- [ ] Production deployment, backup/restore drills, upgrade/rollback runbook.
+- [ ] Reproducible committed lockfiles.
 
-## Verification status
+The API token is a temporary single-instance bootstrap guard, not a substitute for user sessions or granular authorization. The web cockpit remains a clearly labeled design preview and does not show live repository data yet.
 
-The source files and GitHub workflow have been committed. A successful build/test run has not yet been confirmed in this work session. Do not describe the API or web UI as production-ready until CI passes and the integration/security gates in the relevant issues are complete.
-
-## Current starting commands
-
-API:
+## Current API run
 
 ```bash
+cp .env.example .env
+# Set RIOTGIT_API_TOKEN to a long random secret.
 cargo run -p riotgit-api
 ```
 
-Web:
+See [API README](../apps/api/README.md) for PowerShell instructions, routes, and examples.
 
-```bash
-cd apps/web
-npm install
-npm run dev
-```
+## Status language
 
-The API binds to `127.0.0.1:8787` by default. The web page is currently a design preview; live API integration is tracked in Issue #6.
+Do not describe R!OTGIT as a complete Git forge or production-ready product until authenticated Git transport, identity/RBAC, collaboration workflows, backup/restore, and the corresponding integration/security gates pass.

@@ -45,6 +45,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 - [x] Git CLI round-trip: create repository → push → clone → compare file.
 - [x] Receive-pack branch policy: PR-required direct push denial, branch deletion denial, and non-fast-forward denial.
 - [x] Branch protection rules management API and repository settings UI.
+- [x] Pull request create/list/close/reopen, review history, approval-gated merge, conflict check, stale-ref rejection, compare-and-swap update, and merge recovery state.
 - [x] Permission smoke: read-only clone succeeds, push is denied, revoked grant blocks later clone.
 
 ### Web application
@@ -76,7 +77,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 - [x] Bounded base/head diff view.
 - [ ] Blame, syntax highlighting, archive downloads, and large-file pagination.
 - [x] Branch protection settings UI for Smart HTTP.
-- [ ] Pull requests, reviews, merge checks, and merge engine.
+- [ ] Inline review comments, required-check/status integration, multi-approval policy configuration, and polished PR activity timeline.
 - [x] Repository Issues: create/list/update/close, comments, repository access checks, and browser tracker UI.
 - [x] Repository labels and issue milestones in API and UI.
 - [ ] Assignees, notifications, and a richer issue timeline.

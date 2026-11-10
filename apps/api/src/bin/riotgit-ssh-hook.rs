@@ -18,12 +18,10 @@ fn main() {
 }
 
 async fn run() -> Result<()> {
-    let repository_id = env::var("RIOTGIT_SSH_REPOSITORY_ID")
-        .context("Repository security context is missing")?;
-    let actor_id =
-        env::var("RIOTGIT_SSH_ACTOR_ID").context("Actor security context is missing")?;
-    let git_dir =
-        env::var("GIT_DIR").context("Git receive-pack did not provide GIT_DIR")?;
+    let repository_id =
+        env::var("RIOTGIT_SSH_REPOSITORY_ID").context("Repository security context is missing")?;
+    let actor_id = env::var("RIOTGIT_SSH_ACTOR_ID").context("Actor security context is missing")?;
+    let git_dir = env::var("GIT_DIR").context("Git receive-pack did not provide GIT_DIR")?;
     let git_bin = ssh_common::git_binary();
     let pool = ssh_common::open_pool().await?;
 
@@ -52,9 +50,7 @@ async fn run() -> Result<()> {
         let Some(branch_name) = reference.strip_prefix("refs/heads/") else {
             continue;
         };
-        let Some(rule) =
-            ssh_common::branch_rule(&pool, &repository_id, branch_name).await?
-        else {
+        let Some(rule) = ssh_common::branch_rule(&pool, &repository_id, branch_name).await? else {
             continue;
         };
 

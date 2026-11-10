@@ -28,6 +28,7 @@ pub(crate) struct Issue {
     created_at: String,
     updated_at: String,
     closed_at: Option<String>,
+    milestone_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -127,7 +128,7 @@ fn validate_body(body: &str) -> Result<(), ApiError> {
 
 async fn load_issue(state: &AppState, repository_id: &str, number: i64) -> Result<Issue, ApiError> {
     sqlx::query_as::<_, Issue>(
-        "SELECT id, number, title, body, state, author_id, created_at, updated_at, closed_at
+        "SELECT id, number, title, body, state, author_id, created_at, updated_at, closed_at, milestone_id
          FROM issues WHERE repository_id = ? AND number = ?",
     )
     .bind(repository_id)
@@ -158,7 +159,7 @@ pub(crate) async fn list_issues(
     let offset = query.offset.unwrap_or(0).max(0);
 
     let issues = sqlx::query_as::<_, Issue>(
-        "SELECT id, number, title, body, state, author_id, created_at, updated_at, closed_at
+        "SELECT id, number, title, body, state, author_id, created_at, updated_at, closed_at, milestone_id
          FROM issues
          WHERE repository_id = ? AND (? IS NULL OR state = ?)
          ORDER BY number DESC
@@ -219,7 +220,7 @@ pub(crate) async fn create_issue(
     let issue = sqlx::query_as::<_, Issue>(
         "INSERT INTO issues (id, repository_id, number, title, body, state, author_id)
          VALUES (?, ?, (SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE repository_id = ?), ?, ?, 'open', ?)
-         RETURNING id, number, title, body, state, author_id, created_at, updated_at, closed_at",
+         RETURNING id, number, title, body, state, author_id, created_at, updated_at, closed_at, milestone_id",
     )
     .bind(Uuid::new_v4().simple().to_string())
     .bind(&repository.id)

@@ -57,6 +57,14 @@ type IssueEntry = {
   closed_at: string | null;
 };
 
+type IssueCommentEntry = {
+  id: string;
+  issue_number: number;
+  author_id: string;
+  body: string;
+  created_at: string;
+};
+
 export default function RepositoryPage() {
   const params = useParams<{ owner: string; name: string }>();
   const owner = params.owner;
@@ -67,6 +75,10 @@ export default function RepositoryPage() {
   const [blob, setBlob] = useState<BlobResult | null>(null);
   const [commits, setCommits] = useState<CommitEntry[]>([]);
   const [issues, setIssues] = useState<IssueEntry[]>([]);
+  const [activeIssueNumber, setActiveIssueNumber] = useState<number | null>(null);
+  const [issueComments, setIssueComments] = useState<IssueCommentEntry[]>([]);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [issueTitle, setIssueTitle] = useState("");
   const [issueBody, setIssueBody] = useState("");
   const [diffBase, setDiffBase] = useState("main");
@@ -215,6 +227,58 @@ export default function RepositoryPage() {
       setLoading(false);
     }
   }, [owner, name]);
+
+  async function openIssueComments(issueNumber: number) {
+    if (activeIssueNumber === issueNumber) {
+      setActiveIssueNumber(null);
+      setIssueComments([]);
+      setCommentDraft("");
+      return;
+    }
+    setActiveIssueNumber(issueNumber);
+    setIssueComments([]);
+    setCommentDraft("");
+    setCommentsLoading(true);
+    const query = new URLSearchParams({ owner, name, number: String(issueNumber) });
+    try {
+      const response = await fetch("/api/repository-issues?" + query.toString(), {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as IssueCommentEntry[] | { error?: string };
+      if (!response.ok || !Array.isArray(payload)) {
+        setError(!Array.isArray(payload) ? (payload.error ?? "Could not load issue comments.") : "Could not load issue comments.");
+        return;
+      }
+      setIssueComments(payload);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setCommentsLoading(false);
+    }
+  }
+
+  async function submitIssueComment(event: FormEvent<HTMLFormElement>, issueNumber: number) {
+    event.preventDefault();
+    if (!commentDraft.trim()) return;
+    setError("");
+    try {
+      const response = await fetch("/api/repository-issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, name, number: issueNumber, body: commentDraft }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as IssueCommentEntry & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Comment could not be posted.");
+        return;
+      }
+      setCommentDraft("");
+      await openIssueComments(issueNumber);
+      await openIssueComments(issueNumber);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    }
+  }
 
   async function submitIssue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -448,9 +512,44 @@ export default function RepositoryPage() {
                     <small>{issue.state.toUpperCase()} · OPENED {new Date(issue.created_at).toLocaleDateString()}</small>
                     {issue.body ? <p>{issue.body}</p> : null}
                   </div>
-                  <button type="button" className="text-link issue-toggle" onClick={() => void toggleIssue(issue)}>
-                    {issue.state === "open" ? "CLOSE" : "REOPEN"}
-                  </button>
+                  <div className="issue-actions">
+                    <button type="button" className="text-link issue-toggle" onClick={() => void openIssueComments(issue.number)}>
+                      {activeIssueNumber === issue.number ? "HIDE COMMENTS" : "COMMENTS"}
+                    </button>
+                    <button type="button" className="text-link issue-toggle" onClick={() => void toggleIssue(issue)}>
+                      {issue.state === "open" ? "CLOSE" : "REOPEN"}
+                    </button>
+                  </div>
+                  {activeIssueNumber === issue.number ? (
+                    <div className="issue-comments">
+                      <strong className="eyebrow muted">DISCUSSION / #{issue.number}</strong>
+                      {commentsLoading ? (
+                        <span className="issue-comment-empty">LOADING COMMENTS...</span>
+                      ) : issueComments.length ? (
+                        issueComments.map((comment) => (
+                          <article className="issue-comment" key={comment.id}>
+                            <span className="comment-author">{comment.author_id.slice(0, 8)}</span>
+                            <div><p>{comment.body}</p><small>{new Date(comment.created_at).toLocaleString()}</small></div>
+                          </article>
+                        ))
+                      ) : (
+                        <span className="issue-comment-empty">NO COMMENTS YET.</span>
+                      )}
+                      {issue.state === "open" ? (
+                        <form className="issue-comment-form" onSubmit={(event) => void submitIssueComment(event, issue.number)}>
+                          <textarea
+                            aria-label="Write a comment"
+                            rows={2}
+                            value={commentDraft}
+                            onChange={(event) => setCommentDraft(event.target.value)}
+                            maxLength={10000}
+                            placeholder="Add a useful comment..."
+                          />
+                          <button type="submit" className="mini-action" disabled={!commentDraft.trim()}>POST COMMENT</button>
+                        </form>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

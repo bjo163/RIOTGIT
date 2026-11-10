@@ -77,7 +77,6 @@ fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
             && matches!(path, "git-upload-pack" | "git-receive-pack"))
 }
 
-
 #[derive(Debug, Clone)]
 struct RefUpdate {
     old_oid: String,
@@ -123,12 +122,7 @@ fn parse_receive_pack_updates(body: &[u8]) -> Result<Vec<RefUpdate>, ()> {
                     .next()
                     .unwrap_or_default()
                     .strip_suffix(b"\n")
-                    .unwrap_or_else(|| {
-                        packet
-                            .split(|byte| *byte == 0)
-                            .next()
-                            .unwrap_or_default()
-                    });
+                    .unwrap_or_else(|| packet.split(|byte| *byte == 0).next().unwrap_or_default());
                 let Ok(line) = std::str::from_utf8(command) else {
                     continue;
                 };
@@ -208,10 +202,7 @@ async fn enforce_branch_protection(
             return Err(StatusCode::FORBIDDEN);
         }
 
-        if *prevent_force_push
-            && !is_zero_oid(&update.old_oid)
-            && !is_zero_oid(&update.new_oid)
-        {
+        if *prevent_force_push && !is_zero_oid(&update.old_oid) && !is_zero_oid(&update.new_oid) {
             let status = timeout(
                 Duration::from_secs(5),
                 Command::new(&state.git_bin)

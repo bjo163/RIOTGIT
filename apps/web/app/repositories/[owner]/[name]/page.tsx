@@ -273,8 +273,15 @@ export default function RepositoryPage() {
         return;
       }
       setCommentDraft("");
-      await openIssueComments(issueNumber);
-      await openIssueComments(issueNumber);
+      const query = new URLSearchParams({ owner, name, number: String(issueNumber) });
+      const commentsResponse = await fetch("/api/repository-issues?" + query.toString(), { cache: "no-store" });
+      const commentsPayload = (await commentsResponse.json().catch(() => ({}))) as IssueCommentEntry[] | { error?: string };
+      if (commentsResponse.ok && Array.isArray(commentsPayload)) {
+        setIssueComments(commentsPayload);
+        setActiveIssueNumber(issueNumber);
+      } else {
+        setError(!Array.isArray(commentsPayload) ? (commentsPayload.error ?? "Comment was posted but comments could not be refreshed.") : "Comment was posted but comments could not be refreshed.");
+      }
     } catch {
       setError("Could not reach the R!OTGIT API.");
     }

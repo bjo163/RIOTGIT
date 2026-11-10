@@ -125,11 +125,7 @@ fn validate_body(body: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
-async fn load_issue(
-    state: &AppState,
-    repository_id: &str,
-    number: i64,
-) -> Result<Issue, ApiError> {
+async fn load_issue(state: &AppState, repository_id: &str, number: i64) -> Result<Issue, ApiError> {
     sqlx::query_as::<_, Issue>(
         "SELECT id, number, title, body, state, author_id, created_at, updated_at, closed_at
          FROM issues WHERE repository_id = ? AND number = ?",

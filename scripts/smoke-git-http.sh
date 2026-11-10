@@ -72,6 +72,12 @@ curl --fail --silent --show-error -X PUT "$BASE_URL/api/v1/repositories/builder/
 
 ISSUE_NUMBER="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"title":"Issue workflow smoke","body":"Verify issue creation, visibility, comments, and close state."}' | jq -er '.number')"
 curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" -H "Authorization: Bearer $READER_TOKEN" | jq -e --argjson number "$ISSUE_NUMBER" 'any(.[]; .number == $number)' >/dev/null
+LABEL_ID="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/labels" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"name":"bug","color":"FF5A1F","description":"Bug report"}' | jq -er '.id')"
+curl --fail --silent --show-error -X PUT "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/labels/$LABEL_ID" -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/labels" -H "Authorization: Bearer $BUILDER_TOKEN" | jq -e --arg id "$LABEL_ID" 'any(.[]; .id == $id)' >/dev/null
+MILESTONE_NUMBER="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/milestones" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"title":"Smoke milestone","description":"Milestone smoke coverage"}' | jq -er '.number')"
+curl --fail --silent --show-error -X PUT "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/milestone" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d "{\"number\":$MILESTONE_NUMBER}" >/dev/null
+curl --fail --silent --show-error -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/milestone" -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
 
 READER_ISSUE_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" -H "Authorization: Bearer $READER_TOKEN" -H "Content-Type: application/json" -d '{"title":"Reader issue","body":"This must be denied."}')"
 if [[ "$READER_ISSUE_STATUS" != "403" ]]; then

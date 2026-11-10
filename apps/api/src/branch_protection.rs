@@ -52,7 +52,8 @@ pub(crate) fn valid_branch_name(value: &str) -> bool {
     if value.is_empty()
         || value.len() > 200
         || value.starts_with('-')
-        || value.ends_with(['.', '/'])
+        || value.ends_with('.')
+        || value.ends_with('/')
         || value.contains("..")
         || value.contains("//")
         || value.contains("@{")
@@ -169,7 +170,7 @@ pub(crate) async fn set_rule(
     .bind(input.require_pull_request)
     .bind(input.prevent_force_push)
     .bind(input.prevent_deletion)
-    .bind(&actor.user_id)
+    .bind((actor.user_id != "system").then_some(actor.user_id.as_str()))
     .fetch_one(&state.pool)
     .await
     .map_err(|error| {

@@ -352,3 +352,17 @@ button { cursor: pointer; }
   .issues-heading { gap: 8px; }
   .issues-heading span { font-size: 7px; }
 }
+
+
+.diff-workspace { overflow: hidden; }
+.diff-controls { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; padding: 14px; border-bottom: 1px solid #303030; background: #131313; }
+.diff-controls label { display: grid; gap: 5px; color: #888; font: 8px var(--font-mono); letter-spacing: .9px; }
+.diff-controls input { width: min(240px, 30vw); height: 32px; border: 1px solid #414141; background: #1c1c1c; color: var(--concrete); padding: 0 9px; font: 10px var(--font-mono); }
+.diff-controls input:focus { outline: 2px solid var(--riot-lime); outline-offset: 1px; }
+.diff-controls > span { color: var(--hazard-orange); padding-bottom: 9px; }
+.diff-code { max-height: 72vh; overflow: auto; margin: 0; padding: 17px; background: #101010; color: #d3d7c8; font: 10px/1.65 var(--font-mono); tab-size: 4; white-space: pre; }
+@media (max-width: 520px) {
+  .diff-controls { align-items: stretch; }
+  .diff-controls label { flex: 1 1 100%; }
+  .diff-controls input { width: 100%; }
+}

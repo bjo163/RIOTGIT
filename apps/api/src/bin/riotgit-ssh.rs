@@ -1,3 +1,5 @@
+// The shared helper module is compiled into separate binaries; each uses a different subset.
+#[allow(dead_code)]
 #[path = "ssh_common/mod.rs"]
 mod ssh_common;
 

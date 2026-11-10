@@ -40,8 +40,8 @@ ARCHIVE_PATH="$BACKUP_DIR/$ARCHIVE_NAME"
 
 log "Data volume: $VOLUME_NAME"
 log "Stopping API and web so SQLite metadata and bare Git repositories are snapshotted consistently..."
-docker compose -f "$COMPOSE_FILE" stop api web
 RESTART_SERVICES=1
+docker compose -f "$COMPOSE_FILE" stop api web
 
 log "Creating backup archive..."
 docker run --rm --network none \

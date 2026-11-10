@@ -20,6 +20,7 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Native bare Git repository initialization on the filesystem.
 - Repository tree/blob browsing, commit history, and bounded base/head diff view.
 - Issues, comments, labels, and milestones in the repository workspace.
+- Pull request create/review/merge workflow with protected-branch approval checks.
 - Server-side branch protection for Git Smart HTTP receive-pack, with a settings UI.
 - Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
 - Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.

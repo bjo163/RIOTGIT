@@ -62,7 +62,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 
 ### Git and security
 - [ ] OpenSSH forced-command Git transport and SSH key registration/revocation.
-- [ ] Protected branch rules and server-side receive-pack enforcement.
+- [x] Branch protection rules API and server-side receive-pack enforcement for Git Smart HTTP (PR-required direct pushes, deletion guard, and non-fast-forward guard).
 - [ ] Large pack streaming/backpressure; current HTTP gateway buffers bounded request/response bodies.
 - [ ] Git LFS.
 - [ ] Login/API rate limiting, origin/CSRF defense review, token rotation, and security hardening.
@@ -71,7 +71,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 ### Forge collaboration
 - [x] Repository tree/blob browser and commit history.
 - [ ] Blame and diff view.
-- [ ] Pull requests, reviews, merge checks, merge engine, and branch protection UI.
+- [ ] Pull requests, reviews, merge checks, merge engine, and branch protection settings UI.
 - [x] Repository Issues: create/list/update/close, comments, repository access checks, and browser tracker UI.
 - [ ] Labels, milestones, notifications, and issue detail timeline.
 - [ ] CLI/TUI.
@@ -92,7 +92,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 
 ## Important limitations
 
-- Smart HTTP is implemented; SSH is not.
+- Smart HTTP and server-side branch protection are implemented; SSH is not. Branch rules requiring a pull request block direct Smart HTTP pushes until a reviewed merge workflow exists.
 - Identity and repository-level grants work, but there is no organization/team model yet.
 - Protected-branch policy is not enforced yet.
 - Web supports live repository data, tree/blob browsing, commit history, bounded diffs, and basic repository issue/comment workflows; pull requests and advanced collaboration are not implemented.

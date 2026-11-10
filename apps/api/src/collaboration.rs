@@ -412,7 +412,6 @@ pub(crate) async fn create_comment(
     Ok((StatusCode::CREATED, Json(comment)))
 }
 
-
 #[derive(Debug, Serialize, FromRow)]
 pub(crate) struct Label {
     id: String,
@@ -513,10 +512,18 @@ pub(crate) async fn create_label(
     let color = input.color.unwrap_or_else(|| "D7FF38".to_owned());
     let color = color.trim().trim_start_matches('#');
     if color.len() != 6 || !color.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(ApiError::bad_request("Label color must be a six-digit hexadecimal value."));
+        return Err(ApiError::bad_request(
+            "Label color must be a six-digit hexadecimal value.",
+        ));
     }
-    if input.description.as_ref().is_some_and(|value| value.len() > 500) {
-        return Err(ApiError::bad_request("Label description must be 500 bytes or fewer."));
+    if input
+        .description
+        .as_ref()
+        .is_some_and(|value| value.len() > 500)
+    {
+        return Err(ApiError::bad_request(
+            "Label description must be 500 bytes or fewer.",
+        ));
     }
 
     let label = sqlx::query_as::<_, Label>(
@@ -532,15 +539,29 @@ pub(crate) async fn create_label(
     .fetch_one(&state.pool)
     .await
     .map_err(|error| {
-        if error.as_database_error().is_some_and(|db| db.is_unique_violation()) {
-            ApiError::new(StatusCode::CONFLICT, "label_exists", "A label with this name already exists.")
+        if error
+            .as_database_error()
+            .is_some_and(|db| db.is_unique_violation())
+        {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "label_exists",
+                "A label with this name already exists.",
+            )
         } else {
             error!(%error, "failed to create repository label");
             ApiError::internal()
         }
     })?;
 
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "label.create", "label", Some(&label.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "label.create",
+        "label",
+        Some(&label.id),
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(label)))
 }
 
@@ -605,11 +626,22 @@ pub(crate) async fn add_issue_label(
             ApiError::internal()
         })?;
         if !exists {
-            return Err(ApiError::new(StatusCode::NOT_FOUND, "label_not_found", "Label not found."));
+            return Err(ApiError::new(
+                StatusCode::NOT_FOUND,
+                "label_not_found",
+                "Label not found.",
+            ));
         }
     }
 
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "issue.label.add", "issue", Some(&issue.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "issue.label.add",
+        "issue",
+        Some(&issue.id),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -638,7 +670,14 @@ pub(crate) async fn remove_issue_label(
         ApiError::internal()
     })?;
 
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "issue.label.remove", "issue", Some(&issue.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "issue.label.remove",
+        "issue",
+        Some(&issue.id),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -673,18 +712,32 @@ pub(crate) async fn create_milestone(
 
     let title = input.title.trim();
     if title.is_empty() || title.len() > 100 {
-        return Err(ApiError::bad_request("Milestone title must contain 1-100 bytes."));
+        return Err(ApiError::bad_request(
+            "Milestone title must contain 1-100 bytes.",
+        ));
     }
-    if input.description.as_ref().is_some_and(|value| value.len() > 5000) {
-        return Err(ApiError::bad_request("Milestone description must be 5000 bytes or fewer."));
+    if input
+        .description
+        .as_ref()
+        .is_some_and(|value| value.len() > 5000)
+    {
+        return Err(ApiError::bad_request(
+            "Milestone description must be 5000 bytes or fewer.",
+        ));
     }
     if input.due_on.as_ref().is_some_and(|value| {
         value.len() != 10
             || !value.as_bytes().iter().enumerate().all(|(i, b)| {
-                if matches!(i, 4 | 7) { *b == b'-' } else { b.is_ascii_digit() }
+                if matches!(i, 4 | 7) {
+                    *b == b'-'
+                } else {
+                    b.is_ascii_digit()
+                }
             })
     }) {
-        return Err(ApiError::bad_request("Milestone due date must use YYYY-MM-DD."));
+        return Err(ApiError::bad_request(
+            "Milestone due date must use YYYY-MM-DD.",
+        ));
     }
 
     let milestone = sqlx::query_as::<_, Milestone>(
@@ -705,7 +758,14 @@ pub(crate) async fn create_milestone(
         ApiError::internal()
     })?;
 
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "milestone.create", "milestone", Some(&milestone.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "milestone.create",
+        "milestone",
+        Some(&milestone.id),
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(milestone)))
 }
 
@@ -729,7 +789,13 @@ pub(crate) async fn assign_issue_milestone(
         error!(%error, "failed to resolve milestone");
         ApiError::internal()
     })?
-    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "milestone_not_found", "Open milestone not found."))?;
+    .ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "milestone_not_found",
+            "Open milestone not found.",
+        )
+    })?;
 
     sqlx::query(
         "UPDATE issues SET milestone_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -743,7 +809,14 @@ pub(crate) async fn assign_issue_milestone(
         error!(%error, "failed to assign milestone");
         ApiError::internal()
     })?;
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "issue.milestone.assign", "issue", Some(&issue.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "issue.milestone.assign",
+        "issue",
+        Some(&issue.id),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -766,6 +839,13 @@ pub(crate) async fn clear_issue_milestone(
         error!(%error, "failed to clear issue milestone");
         ApiError::internal()
     })?;
-    crate::auth::record_audit(&state.pool, Some(&actor.user_id), "issue.milestone.clear", "issue", Some(&issue.id)).await;
+    crate::auth::record_audit(
+        &state.pool,
+        Some(&actor.user_id),
+        "issue.milestone.clear",
+        "issue",
+        Some(&issue.id),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }

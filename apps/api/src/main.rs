@@ -18,7 +18,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-pub(crate) mod auth;
+pub(crate) pub(crate) mod auth;
 mod git_http;
 
 #[derive(Clone)]

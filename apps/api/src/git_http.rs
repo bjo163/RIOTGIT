@@ -150,7 +150,7 @@ pub(crate) async fn transport(
 
     let Some(actor) = authenticated(&parts.headers, &state).await else {
         return unauthorized();
-    }
+    };
 
     let Some(repo_name) = repo_path.strip_suffix(".git") else {
         return plain_response(StatusCode::NOT_FOUND, "Repository not found.");

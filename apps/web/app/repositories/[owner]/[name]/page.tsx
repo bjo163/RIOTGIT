@@ -490,6 +490,7 @@ export default function RepositoryPage() {
         </div>
         <div className="repo-browser-actions">
           <button type="button" className="mini-action" onClick={() => void loadTree("", reference)}>↻ REFRESH</button>
+          <Link href={`/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/settings/branches`} className="text-link">BRANCH RULES ↗</Link>
           <Link href="/" className="text-link">← BACK TO DASHBOARD</Link>
         </div>
       </section>

@@ -720,6 +720,26 @@ async fn main() -> anyhow::Result<()> {
             get(collaboration::list_comments).post(collaboration::create_comment),
         )
         .route(
+            "/api/v1/repositories/{owner}/{name}/labels",
+            get(collaboration::list_labels).post(collaboration::create_label),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/milestones",
+            get(collaboration::list_milestones).post(collaboration::create_milestone),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues/{number}/labels",
+            get(collaboration::list_issue_labels),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues/{number}/labels/{label_id}",
+            put(collaboration::add_issue_label).delete(collaboration::remove_issue_label),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues/{number}/milestone",
+            put(collaboration::assign_issue_milestone).delete(collaboration::clear_issue_milestone),
+        )
+        .route(
             "/api/v1/repositories/{owner}/{name}/tree",
             get(git_browser::tree),
         )

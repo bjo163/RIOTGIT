@@ -110,6 +110,16 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0="http.extraHeader"
 export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
 git -C "$SOURCE_DIR" push --quiet --set-upstream origin main
+curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"branch_name":"main","require_pull_request":true,"prevent_force_push":true,"prevent_deletion":true}' >/dev/null
+printf "protected branch direct push must fail\n" >>"$SOURCE_DIR/README.md"
+git -C "$SOURCE_DIR" add README.md
+git -C "$SOURCE_DIR" commit -m "test: protected direct push must fail" >/dev/null
+if git -C "$SOURCE_DIR" push origin main >/dev/null 2>&1; then
+  echo "ERROR: direct push to protected main branch was allowed." >&2
+  exit 1
+fi
+curl --fail --silent --show-error -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection?branch_name=main" -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+git -C "$SOURCE_DIR" push --quiet origin main
 printf 'R!OTGIT diff smoke marker\n' >"$SOURCE_DIR/DIFF.txt"
 git -C "$SOURCE_DIR" add DIFF.txt
 git -C "$SOURCE_DIR" commit -m "test: add diff smoke marker" >/dev/null

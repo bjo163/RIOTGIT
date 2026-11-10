@@ -51,7 +51,7 @@ riotgit repo clone builder notes
 riotgit ssh-key add ~/.ssh/id_ed25519.pub
 ```
 
-See [CLI guide](apps/cli/README.md). SSH key registration is available; OpenSSH clone/push transport remains a separate unfinished feature.
+See [CLI guide](apps/cli/README.md). Manage public keys in the web app at Account → SSH Keys. Key registration is available independently from the optional OpenSSH clone/push gateway.
 
 ## Backup and recovery
 

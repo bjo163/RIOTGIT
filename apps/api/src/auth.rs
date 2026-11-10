@@ -428,14 +428,14 @@ pub(crate) async fn logout(
     let actor = authenticate(&headers, &state).await?;
     if let Some(session_id) = actor.session_id {
         sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
-        .bind(unix_now())
-        .bind(&session_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|error| {
-            error!(%error, "failed to revoke session");
-            ApiError::internal()
-        })?;
+            .bind(unix_now())
+            .bind(&session_id)
+            .execute(&state.pool)
+            .await
+            .map_err(|error| {
+                error!(%error, "failed to revoke session");
+                ApiError::internal()
+            })?;
 
         record_audit(
             &state.pool,

@@ -546,7 +546,7 @@ mod tests {
     fn parses_receive_pack_branch_updates() {
         let old_oid = "1111111111111111111111111111111111111111";
         let new_oid = "2222222222222222222222222222222222222222";
-        let command = format!("{old_oid} {new_oid} refs/heads/main\\0report-status\n");
+        let command = format!("{old_oid} {new_oid} refs/heads/main\0report-status\n");
         let packet_length = command.len() + 4;
         let mut body = format!("{packet_length:04x}").into_bytes();
         body.extend_from_slice(command.as_bytes());

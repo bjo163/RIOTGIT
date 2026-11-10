@@ -328,6 +328,18 @@ async fn get_repository(
     })?
     .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "Repository not found."))?;
 
+    if fs::metadata(state.storage_root.join(&record.storage_key))
+        .await
+        .is_err()
+    {
+        warn!(repo_id = %record.id, "repository metadata points to missing storage");
+        return Err(ApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "storage_unavailable",
+            "Repository storage is unavailable.",
+        ));
+    }
+
     Ok(Json(record))
 }
 
@@ -411,8 +423,8 @@ async fn create_repository(
     )
     .await;
 
-    let output = match init {
-        Ok(Ok(output)) if output.status.success() => output,
+    match init {
+        Ok(Ok(output)) if output.status.success() => {},
         Ok(Ok(output)) => {
             warn!(repo_id = %id, status = ?output.status, "native git init failed");
             let _ = fs::remove_dir_all(&staging_path).await;

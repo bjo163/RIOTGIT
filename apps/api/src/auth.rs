@@ -380,9 +380,7 @@ pub(crate) async fn login(
         return Err(ApiError::unauthorized());
     };
     if user.status != "active" || !verify_password(user.password_hash, input.password).await {
-        sqlx::query(
-            "INSERT INTO login_attempts (id, username_digest, succeeded) VALUES (?, ?, 0)",
-        )
+        sqlx::query("INSERT INTO login_attempts (id, username_digest, succeeded) VALUES (?, ?, 0)")
         .bind(Uuid::new_v4().simple().to_string())
         .bind(&username_digest)
         .execute(&state.pool)

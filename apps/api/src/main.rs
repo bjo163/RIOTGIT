@@ -55,7 +55,11 @@ struct ApiError {
 
 impl ApiError {
     fn new(status: StatusCode, code: &'static str, message: &'static str) -> Self {
-        Self { status, code, message }
+        Self {
+            status,
+            code,
+            message,
+        }
     }
 
     fn bad_request(message: &'static str) -> Self {
@@ -63,7 +67,11 @@ impl ApiError {
     }
 
     fn unauthorized() -> Self {
-        Self::new(StatusCode::UNAUTHORIZED, "unauthorized", "A valid bearer token is required.")
+        Self::new(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "A valid bearer token is required.",
+        )
     }
 
     fn unavailable(message: &'static str) -> Self {
@@ -71,7 +79,11 @@ impl ApiError {
     }
 
     fn internal() -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "The request could not be completed.")
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "The request could not be completed.",
+        )
     }
 }
 
@@ -182,8 +194,7 @@ fn parse_bind() -> anyhow::Result<SocketAddr> {
 }
 
 async fn open_database() -> anyhow::Result<SqlitePool> {
-    let path = env::var("RIOTGIT_DATABASE_PATH")
-        .unwrap_or_else(|_| "data/riotgit.db".to_owned());
+    let path = env::var("RIOTGIT_DATABASE_PATH").unwrap_or_else(|_| "data/riotgit.db".to_owned());
     let path = PathBuf::from(path);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;
@@ -206,8 +217,8 @@ async fn open_database() -> anyhow::Result<SqlitePool> {
 }
 
 async fn prepare_storage() -> anyhow::Result<(PathBuf, PathBuf, PathBuf)> {
-    let configured = env::var("RIOTGIT_STORAGE_ROOT")
-        .unwrap_or_else(|_| "data/repositories".to_owned());
+    let configured =
+        env::var("RIOTGIT_STORAGE_ROOT").unwrap_or_else(|_| "data/repositories".to_owned());
     fs::create_dir_all(&configured).await?;
     let root = fs::canonicalize(&configured).await?;
     let template_dir = root.join(".templates");
@@ -224,7 +235,10 @@ async fn prepare_storage() -> anyhow::Result<(PathBuf, PathBuf, PathBuf)> {
 async fn live() -> (StatusCode, Json<HealthResponse>) {
     (
         StatusCode::OK,
-        Json(HealthResponse { status: "live", service: "riotgit-api" }),
+        Json(HealthResponse {
+            status: "live",
+            service: "riotgit-api",
+        }),
     )
 }
 
@@ -234,12 +248,18 @@ async fn ready(State(state): State<AppState>) -> (StatusCode, Json<HealthRespons
     if database_ok && storage_ok {
         (
             StatusCode::OK,
-            Json(HealthResponse { status: "ready", service: "riotgit-api" }),
+            Json(HealthResponse {
+                status: "ready",
+                service: "riotgit-api",
+            }),
         )
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(HealthResponse { status: "not_ready", service: "riotgit-api" }),
+            Json(HealthResponse {
+                status: "not_ready",
+                service: "riotgit-api",
+            }),
         )
     }
 }
@@ -330,10 +350,18 @@ async fn create_repository(
         ));
     }
     if !matches!(input.visibility.as_str(), "public" | "private" | "internal") {
-        return Err(ApiError::bad_request("Visibility must be public, private, or internal."));
+        return Err(ApiError::bad_request(
+            "Visibility must be public, private, or internal.",
+        ));
     }
-    if input.description.as_ref().is_some_and(|value| value.len() > 1000) {
-        return Err(ApiError::bad_request("Description must be 1000 characters or fewer."));
+    if input
+        .description
+        .as_ref()
+        .is_some_and(|value| value.len() > 1000)
+    {
+        return Err(ApiError::bad_request(
+            "Description must be 1000 characters or fewer.",
+        ));
     }
 
     let id = Uuid::new_v4().simple().to_string();
@@ -355,8 +383,15 @@ async fn create_repository(
     .execute(&state.pool)
     .await
     .map_err(|error| {
-        if error.as_database_error().is_some_and(|db| db.is_unique_violation()) {
-            ApiError::new(StatusCode::CONFLICT, "already_exists", "A repository with this owner and name already exists.")
+        if error
+            .as_database_error()
+            .is_some_and(|db| db.is_unique_violation())
+        {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "already_exists",
+                "A repository with this owner and name already exists.",
+            )
         } else {
             error!(%error, "failed to reserve repository metadata");
             ApiError::internal()
@@ -504,7 +539,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
         .route("/api/v1/meta", get(meta))
-        .route("/api/v1/repositories", get(list_repositories).post(create_repository))
+        .route(
+            "/api/v1/repositories",
+            get(list_repositories).post(create_repository),
+        )
         .route("/api/v1/repositories/{owner}/{name}", get(get_repository))
         .with_state(state);
 

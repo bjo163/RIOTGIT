@@ -12,47 +12,25 @@ use axum::{
     response::Response,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use sha2::{Digest, Sha256};
-use subtle::ConstantTimeEq;
 use tokio::{fs, io::AsyncWriteExt, process::Command, time::timeout};
 use tracing::{error, warn};
 
 use crate::AppState;
 
-fn token_matches(token: &str, state: &AppState) -> bool {
-    let Some(expected) = state.api_token_digest else {
-        return false;
-    };
-    let actual: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-    bool::from(expected.ct_eq(&actual))
-}
-
-fn authenticated(headers: &HeaderMap, state: &AppState) -> bool {
-    let Some(auth) = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-    else {
-        return false;
+async fn authenticated(headers: &HeaderMap, state: &AppState) -> Option<crate::auth::Actor> {
+    let auth = headers.get(AUTHORIZATION)?.to_str().ok()?;
+    let token = if let Some(token) = auth.strip_prefix("Bearer ") {
+        token.to_owned()
+    } else if let Some(encoded) = auth.strip_prefix("Basic ") {
+        let decoded = STANDARD.decode(encoded).ok()?;
+        let credentials = std::str::from_utf8(&decoded).ok()?;
+        let (_, password) = credentials.split_once(':')?;
+        password.to_owned()
+    } else {
+        return None;
     };
 
-    if let Some(token) = auth.strip_prefix("Bearer ") {
-        return token_matches(token, state);
-    }
-
-    if let Some(encoded) = auth.strip_prefix("Basic ") {
-        let Ok(decoded) = STANDARD.decode(encoded) else {
-            return false;
-        };
-        let Ok(credentials) = std::str::from_utf8(&decoded) else {
-            return false;
-        };
-        let Some((_, password)) = credentials.split_once(':') else {
-            return false;
-        };
-        return token_matches(password, state);
-    }
-
-    false
+    crate::auth::actor_from_token(&token, state).await
 }
 
 fn plain_response(status: StatusCode, message: &'static str) -> Response {
@@ -170,7 +148,7 @@ pub(crate) async fn transport(
 ) -> Response {
     let (parts, body) = request.into_parts();
 
-    if !authenticated(&parts.headers, &state) {
+    let Some(actor) = authenticated(&parts.headers, &state).await else {
         return unauthorized();
     }
 
@@ -189,8 +167,8 @@ pub(crate) async fn transport(
         );
     }
 
-    let storage_key = match sqlx::query_scalar::<_, String>(
-        "SELECT storage_key FROM repositories
+    let repository = match sqlx::query_as::<_, (String, String, String, String)>(
+        "SELECT id, owner, visibility, storage_key FROM repositories
          WHERE owner = ? AND name = ? AND state = 'ready'",
     )
     .bind(&owner)
@@ -198,7 +176,7 @@ pub(crate) async fn transport(
     .fetch_optional(&state.pool)
     .await
     {
-        Ok(Some(storage_key)) => storage_key,
+        Ok(Some(repository)) => repository,
         Ok(None) => return plain_response(StatusCode::NOT_FOUND, "Repository not found."),
         Err(error) => {
             error!(%error, "failed to resolve Git HTTP repository");
@@ -208,6 +186,21 @@ pub(crate) async fn transport(
             );
         }
     };
+    let (repository_id, repository_owner, visibility, storage_key) = repository;
+    let is_write = (parts.method == Method::GET && query == "service=git-receive-pack")
+        || (parts.method == Method::POST && service_path == "git-receive-pack");
+    if !crate::auth::can_access_repository(
+        &state,
+        &actor,
+        &repository_id,
+        &repository_owner,
+        &visibility,
+        is_write,
+    )
+    .await
+    {
+        return plain_response(StatusCode::NOT_FOUND, "Repository not found.");
+    }
 
     let storage_path = state.storage_root.join(&storage_key);
     if fs::metadata(&storage_path).await.is_err() {
@@ -252,7 +245,7 @@ pub(crate) async fn transport(
         .env("QUERY_STRING", query)
         .env("CONTENT_TYPE", content_type)
         .env("CONTENT_LENGTH", request_body.len().to_string())
-        .env("REMOTE_USER", "riotgit-instance-admin")
+        .env("REMOTE_USER", &actor.username)
         .env("SERVER_PROTOCOL", "HTTP/1.1")
         .env("SERVER_NAME", "riotgit")
         .env("SERVER_PORT", "8787")

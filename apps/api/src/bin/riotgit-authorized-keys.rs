@@ -1,3 +1,4 @@
+#[path = "ssh_common/mod.rs"]
 mod ssh_common;
 
 use std::env;

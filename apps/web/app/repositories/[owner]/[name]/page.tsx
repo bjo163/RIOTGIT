@@ -55,6 +55,23 @@ type IssueEntry = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  milestone_id: string | null;
+};
+
+type LabelEntry = {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+};
+
+type MilestoneEntry = {
+  id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  state: string;
+  due_on: string | null;
 };
 
 type IssueCommentEntry = {
@@ -75,6 +92,14 @@ export default function RepositoryPage() {
   const [blob, setBlob] = useState<BlobResult | null>(null);
   const [commits, setCommits] = useState<CommitEntry[]>([]);
   const [issues, setIssues] = useState<IssueEntry[]>([]);
+  const [labels, setLabels] = useState<LabelEntry[]>([]);
+  const [milestones, setMilestones] = useState<MilestoneEntry[]>([]);
+  const [issueLabels, setIssueLabels] = useState<LabelEntry[]>([]);
+  const [selectedLabelId, setSelectedLabelId] = useState("");
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("D7FF38");
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState("");
+  const [newMilestoneDue, setNewMilestoneDue] = useState("");
   const [activeIssueNumber, setActiveIssueNumber] = useState<number | null>(null);
   const [issueComments, setIssueComments] = useState<IssueCommentEntry[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
@@ -221,6 +246,15 @@ export default function RepositoryPage() {
         return;
       }
       setIssues(payload);
+      const metadataBase = "/api/repository-metadata?owner=" + encodeURIComponent(owner) + "&name=" + encodeURIComponent(name);
+      const [labelsResponse, milestonesResponse] = await Promise.all([
+        fetch(metadataBase + "&resource=labels", { cache: "no-store" }),
+        fetch(metadataBase + "&resource=milestones", { cache: "no-store" }),
+      ]);
+      const labelsPayload = (await labelsResponse.json().catch(() => [])) as LabelEntry[] | { error?: string };
+      const milestonesPayload = (await milestonesResponse.json().catch(() => [])) as MilestoneEntry[] | { error?: string };
+      if (labelsResponse.ok && Array.isArray(labelsPayload)) setLabels(labelsPayload);
+      if (milestonesResponse.ok && Array.isArray(milestonesPayload)) setMilestones(milestonesPayload);
     } catch {
       setError("Could not reach the R!OTGIT API.");
     } finally {
@@ -250,6 +284,10 @@ export default function RepositoryPage() {
         return;
       }
       setIssueComments(payload);
+      const labelQuery = new URLSearchParams({ owner, name, number: String(issueNumber), resource: "issue-labels" });
+      const labelResponse = await fetch("/api/repository-metadata?" + labelQuery.toString(), { cache: "no-store" });
+      const labelPayload = (await labelResponse.json().catch(() => [])) as LabelEntry[] | { error?: string };
+      if (labelResponse.ok && Array.isArray(labelPayload)) setIssueLabels(labelPayload);
     } catch {
       setError("Could not reach the R!OTGIT API.");
     } finally {
@@ -285,6 +323,100 @@ export default function RepositoryPage() {
     } catch {
       setError("Could not reach the R!OTGIT API.");
     }
+  }
+
+  async function createRepositoryLabel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const response = await fetch("/api/repository-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resource: "labels",
+        owner,
+        name,
+        label_name: newLabelName,
+        color: newLabelColor,
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as LabelEntry & { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Label could not be created.");
+      return;
+    }
+    setLabels((current) => [...current, payload].sort((a, b) => a.name.localeCompare(b.name)));
+    setNewLabelName("");
+  }
+
+  async function createRepositoryMilestone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const response = await fetch("/api/repository-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resource: "milestones",
+        owner,
+        name,
+        title: newMilestoneTitle,
+        due_on: newMilestoneDue || undefined,
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as MilestoneEntry & { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Milestone could not be created.");
+      return;
+    }
+    setMilestones((current) => [payload, ...current]);
+    setNewMilestoneTitle("");
+    setNewMilestoneDue("");
+  }
+
+  async function changeIssueMilestone(issue: IssueEntry, value: string) {
+    const response = value
+      ? await fetch("/api/repository-metadata", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resource: "issue-milestone", owner, name, number: issue.number, milestone_number: Number(value) }),
+        })
+      : await fetch("/api/repository-metadata?owner=" + encodeURIComponent(owner) + "&name=" + encodeURIComponent(name) + "&resource=issue-milestone&number=" + issue.number, { method: "DELETE" });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Milestone assignment failed.");
+      return;
+    }
+    const milestone = milestones.find((item) => item.number === Number(value));
+    setIssues((current) => current.map((item) => item.number === issue.number ? { ...item, milestone_id: milestone?.id ?? null } : item));
+  }
+
+  async function addIssueLabel(issueNumber: number) {
+    if (!selectedLabelId) return;
+    const response = await fetch("/api/repository-metadata", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resource: "issue-label", owner, name, number: issueNumber, label_id: selectedLabelId }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Label could not be added.");
+      return;
+    }
+    const query = new URLSearchParams({ owner, name, number: String(issueNumber), resource: "issue-labels" });
+    const refreshed = await fetch("/api/repository-metadata?" + query.toString(), { cache: "no-store" });
+    const refreshedPayload = (await refreshed.json().catch(() => [])) as LabelEntry[];
+    if (refreshed.ok && Array.isArray(refreshedPayload)) setIssueLabels(refreshedPayload);
+    setSelectedLabelId("");
+  }
+
+  async function removeIssueLabel(issueNumber: number, labelId: string) {
+    const query = new URLSearchParams({ owner, name, number: String(issueNumber), resource: "issue-label", label_id: labelId });
+    const response = await fetch("/api/repository-metadata?" + query.toString(), { method: "DELETE" });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      setError(payload.error ?? "Label could not be removed.");
+      return;
+    }
+    setIssueLabels((current) => current.filter((label) => label.id !== labelId));
   }
 
   async function submitIssue(event: FormEvent<HTMLFormElement>) {
@@ -500,6 +632,20 @@ export default function RepositoryPage() {
               ＋ CREATE ISSUE
             </button>
           </form>
+          <div className="issue-metadata-tools">
+            <form className="metadata-create-form" onSubmit={createRepositoryLabel}>
+              <strong className="eyebrow muted">DEFINE LABEL</strong>
+              <input value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} maxLength={50} placeholder="label name" aria-label="New label name" required />
+              <input value={newLabelColor} onChange={(event) => setNewLabelColor(event.target.value)} maxLength={7} placeholder="D7FF38" aria-label="Label color hex" />
+              <button type="submit" className="mini-action" disabled={!newLabelName.trim()}>＋ LABEL</button>
+            </form>
+            <form className="metadata-create-form" onSubmit={createRepositoryMilestone}>
+              <strong className="eyebrow muted">CREATE MILESTONE</strong>
+              <input value={newMilestoneTitle} onChange={(event) => setNewMilestoneTitle(event.target.value)} maxLength={100} placeholder="milestone title" aria-label="New milestone title" required />
+              <input type="date" value={newMilestoneDue} onChange={(event) => setNewMilestoneDue(event.target.value)} aria-label="Milestone due date" />
+              <button type="submit" className="mini-action" disabled={!newMilestoneTitle.trim()}>＋ MILESTONE</button>
+            </form>
+          </div>
           <div className="issues-heading">
             <strong>ISSUE TRACKER</strong>
             <span>{issues.filter((issue) => issue.state === "open").length} OPEN / {issues.length} TOTAL</span>
@@ -519,6 +665,21 @@ export default function RepositoryPage() {
                     <small>{issue.state.toUpperCase()} · OPENED {new Date(issue.created_at).toLocaleDateString()}</small>
                     {issue.body ? <p>{issue.body}</p> : null}
                   </div>
+                  <div className="issue-main-meta">
+                    <label>
+                      MILESTONE
+                      <select
+                        value={milestones.find((item) => item.id === issue.milestone_id)?.number.toString() ?? ""}
+                        onChange={(event) => void changeIssueMilestone(issue, event.target.value)}
+                        aria-label={`Milestone for issue ${issue.number}`}
+                      >
+                        <option value="">NO MILESTONE</option>
+                        {milestones.filter((item) => item.state === "open").map((milestone) => (
+                          <option value={milestone.number} key={milestone.id}>{milestone.number}. {milestone.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <div className="issue-actions">
                     <button type="button" className="text-link issue-toggle" onClick={() => void openIssueComments(issue.number)}>
                       {activeIssueNumber === issue.number ? "HIDE COMMENTS" : "COMMENTS"}
@@ -530,6 +691,31 @@ export default function RepositoryPage() {
                   {activeIssueNumber === issue.number ? (
                     <div className="issue-comments">
                       <strong className="eyebrow muted">DISCUSSION / #{issue.number}</strong>
+                      <div className="issue-label-editor">
+                        <span className="eyebrow muted">LABELS</span>
+                        <div className="issue-label-chips">
+                          {issueLabels.map((label) => (
+                            <button
+                              type="button"
+                              key={label.id}
+                              className="issue-label-chip"
+                              style={{ borderColor: "#" + label.color }}
+                              onClick={() => void removeIssueLabel(issue.number, label.id)}
+                              title="Remove label"
+                            >{label.name} ×</button>
+                          ))}
+                        </div>
+                        <div className="issue-label-add">
+                          <select value={selectedLabelId} onChange={(event) => setSelectedLabelId(event.target.value)} aria-label="Choose label">
+                            <option value="">CHOOSE LABEL</option>
+                            {labels.filter((label) => !issueLabels.some((applied) => applied.id === label.id)).map((label) => (
+                              <option value={label.id} key={label.id}>{label.name}</option>
+                            ))}
+                          </select>
+                          <button type="button" className="text-link" disabled={!selectedLabelId} onClick={() => void addIssueLabel(issue.number)}>ADD</button>
+                        </div>
+                      </div>
+
                       {commentsLoading ? (
                         <span className="issue-comment-empty">LOADING COMMENTS...</span>
                       ) : issueComments.length ? (

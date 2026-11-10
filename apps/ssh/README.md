@@ -1,6 +1,6 @@
 # R!OTGIT OpenSSH Gateway
 
-The OpenSSH gateway is an optional Compose profile. It exposes only Git upload-pack and receive-pack through an SSH forced command; interactive shell, forwarding, agent forwarding, X11, tunnels, and password authentication are disabled.
+The OpenSSH gateway is an optional Compose profile. It reuses the Rust release-builder stage from the API Dockerfile so API and SSH artifacts are compiled once per shared BuildKit cache. It exposes only Git upload-pack and receive-pack through an SSH forced command; interactive shell, forwarding, agent forwarding, X11, tunnels, and password authentication are disabled.
 
 ## Enable
 

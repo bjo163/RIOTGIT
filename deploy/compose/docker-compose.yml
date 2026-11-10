@@ -36,7 +36,8 @@ services:
     profiles: ["ssh"]
     build:
       context: ../..
-      dockerfile: apps/ssh/Dockerfile
+      dockerfile: apps/api/Dockerfile
+      target: ssh-runtime
     image: riotgit/ssh:local
     restart: unless-stopped
     depends_on:

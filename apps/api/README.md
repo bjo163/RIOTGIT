@@ -38,6 +38,9 @@ The API listens on `127.0.0.1:8787` by default.
 - `POST /api/v1/auth/login` — create a bearer session.
 - `GET /api/v1/auth/me` — current identity.
 - `POST /api/v1/auth/logout` — revoke current session.
+- `GET /api/v1/user/ssh-keys` — list the authenticated user's SSH public keys.
+- `POST /api/v1/user/ssh-keys` — register an SSH public key (Ed25519, NIST P-256 ECDSA, security-key, or RSA).
+- `DELETE /api/v1/user/ssh-keys/{key_id}` — revoke an SSH public key.
 - `POST /api/v1/admin/users` — create a user (admin only).
 - `GET /api/v1/repositories` — authenticated, permission-filtered repository listing.
 - `POST /api/v1/repositories` — create a bare repository.
@@ -121,7 +124,7 @@ git -c http.extraHeader="Authorization: Bearer $RIOTGIT_TOKEN" clone \
 
 The transport delegates to native `git http-backend`. Request body size is capped at 64 MiB and backend execution at 120 seconds. The CI smoke test covers administrator bootstrap, builder/reader sessions, read-only clone, push denial, grant revocation, and session logout.
 
-SSH transport, protected-branch rules, rate limiting for login, large-pack streaming, and Git LFS are not implemented yet.
+SSH key registration/revocation and per-username login throttling are implemented. An OpenSSH forced-command transport/daemon is still not implemented; registering a key does not yet enable SSH clone or push. Large-pack streaming and Git LFS are also not implemented.
 
 ## Tests
 

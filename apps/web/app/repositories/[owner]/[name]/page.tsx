@@ -386,6 +386,10 @@ export default function RepositoryPage() {
 
   async function mergePullRequest() {
     if (!selectedPullRequest) return;
+    const confirmed = window.confirm(
+      `Merge pull request #${selectedPullRequest.number} into ${selectedPullRequest.base_ref}? This updates the protected Git ref.`,
+    );
+    if (!confirmed) return;
     setError("");
     setPullRequestBusy(true);
     try {

@@ -366,3 +366,23 @@ button { cursor: pointer; }
   .diff-controls label { flex: 1 1 100%; }
   .diff-controls input { width: 100%; }
 }
+
+
+.issue-row { flex-wrap: wrap; }
+.issue-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+.issue-comments { flex: 1 1 100%; min-width: 0; margin: 4px 0 0 38px; padding: 12px; border-left: 2px solid #505f28; background: #121212; display: grid; gap: 10px; }
+.issue-comments > .eyebrow { color: #888; }
+.issue-comment { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 10px; padding: 9px 0; border-top: 1px solid #2d2d2d; }
+.comment-author { color: var(--riot-lime); font: 8px var(--font-mono); overflow-wrap: anywhere; }
+.issue-comment p { margin: 0; color: #c5c5c5; font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.issue-comment small { display: block; margin-top: 5px; color: #777; font: 8px var(--font-mono); }
+.issue-comment-empty { color: #777; font: 8px var(--font-mono); }
+.issue-comment-form { display: grid; justify-items: start; gap: 7px; padding-top: 8px; border-top: 1px solid #303030; }
+.issue-comment-form textarea { width: 100%; min-height: 58px; resize: vertical; padding: 9px; border: 1px solid #383838; background: #1b1b1b; color: var(--concrete); font: 10px/1.5 var(--font-ui); }
+.issue-comment-form textarea:focus { outline: 2px solid var(--riot-lime); outline-offset: 1px; }
+.issue-comment-form button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 520px) {
+  .issue-comments { margin-left: 0; }
+  .issue-actions { width: 100%; justify-content: flex-end; }
+  .issue-comment { grid-template-columns: 56px minmax(0,1fr); }
+}

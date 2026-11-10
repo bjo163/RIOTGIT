@@ -4,8 +4,8 @@ Last updated: 2026-11-11
 
 ## Verified implementation
 
-The following commit passed the full GitHub Actions pipeline:
-https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
+The current implementation baseline passed the full GitHub Actions pipeline:
+https://github.com/bjo163/RIOTGIT/actions/runs/42893061450
 
 - [x] Rust formatting: `cargo fmt --all -- --check`.
 - [x] Rust compile: `cargo check --workspace --all-targets`.
@@ -13,7 +13,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 - [x] Rust tests: `cargo test --workspace`.
 - [x] API build: `cargo build -p riotgit-api`.
 - [x] Web dependency install, TypeScript typecheck, ESLint, and Next.js production build.
-- [x] End-to-end auth/Git HTTP smoke test.
+- [x] End-to-end auth, issue collaboration, Git HTTP, branch protection, and diff smoke test.
 
 ## Implemented and committed
 
@@ -43,6 +43,8 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 - [x] Authenticated Git Smart HTTP discovery, upload-pack, and receive-pack.
 - [x] Request body cap (64 MiB) and backend execution timeout (120 seconds).
 - [x] Git CLI round-trip: create repository → push → clone → compare file.
+- [x] Receive-pack branch policy: PR-required direct push denial, branch deletion denial, and non-fast-forward denial.
+- [x] Branch protection rules management API and repository settings UI.
 - [x] Permission smoke: read-only clone succeeds, push is denied, revoked grant blocks later clone.
 
 ### Web application
@@ -52,6 +54,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 - [x] Live user and repository dashboard, permission-filtered list, and honest empty states.
 - [x] Repository creation screen backed by the API.
 - [x] Docker Compose internal API routing.
+- [x] Repository tree/blob browser, commit history, bounded diff view, issue tracker, label/milestone controls, and branch-protection settings page.
 
 ### Operations
 - [x] Dockerfiles and single-node Docker Compose profile.
@@ -70,10 +73,13 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 
 ### Forge collaboration
 - [x] Repository tree/blob browser and commit history.
-- [ ] Blame and diff view.
-- [ ] Pull requests, reviews, merge checks, merge engine, and branch protection settings UI.
+- [x] Bounded base/head diff view.
+- [ ] Blame, syntax highlighting, archive downloads, and large-file pagination.
+- [x] Branch protection settings UI for Smart HTTP.
+- [ ] Pull requests, reviews, merge checks, and merge engine.
 - [x] Repository Issues: create/list/update/close, comments, repository access checks, and browser tracker UI.
-- [ ] Labels, milestones, notifications, and issue detail timeline.
+- [x] Repository labels and issue milestones in API and UI.
+- [ ] Assignees, notifications, and a richer issue timeline.
 - [ ] CLI/TUI.
 
 ### Automation and network
@@ -92,10 +98,10 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 
 ## Important limitations
 
-- Smart HTTP and server-side branch protection are implemented; SSH is not. Branch rules requiring a pull request block direct Smart HTTP pushes until a reviewed merge workflow exists.
+- Smart HTTP and server-side branch protection are implemented and smoke-tested. SSH is not. Branch rules requiring a pull request intentionally block direct Smart HTTP pushes until a reviewed merge workflow exists.
 - Identity and repository-level grants work, but there is no organization/team model yet.
-- Protected-branch policy is not enforced yet.
-- Web supports live repository data, tree/blob browsing, commit history, bounded diffs, and basic repository issue/comment workflows; pull requests and advanced collaboration are not implemented.
+- Branch protection is enforced only for Git Smart HTTP receive-pack; it does not yet cover SSH because SSH transport is not implemented.
+- Web supports live repository data, tree/blob browsing, commit history, bounded diffs, issues/comments, labels/milestones, and branch protection settings; pull requests and advanced collaboration are not implemented.
 - CI success verifies this foundation and smoke paths only. It does not make R!OTGIT a complete or production-hardened Git forge.
 - PostgreSQL, P2P/federation, runners, and AI remain planned.
 

@@ -172,14 +172,12 @@ pub(crate) async fn transport(
     let Some(repo_name) = repo_path.strip_suffix(".git") else {
         return plain_response(StatusCode::NOT_FOUND, "Repository not found.");
     };
+    let query = parts.uri.query().unwrap_or("");
     if !valid_segment(&owner)
         || !valid_segment(repo_name)
-        || !valid_operation(
-            &parts.method,
-            &service_path,
-            parts.uri.query().unwrap_or(""),
-        )
+        || !valid_operation(&parts.method, &service_path, query)
     {
+        warn!(method = %parts.method, owner = %owner, repo = %repo_name, service_path = %service_path, query = %query, "rejected unsupported Git smart HTTP request");
         return plain_response(
             StatusCode::BAD_REQUEST,
             "Unsupported Git smart HTTP request.",
@@ -226,7 +224,6 @@ pub(crate) async fn transport(
         }
     };
 
-    let query = parts.uri.query().unwrap_or("");
     let path_info = format!("/{storage_key}/{service_path}");
     let content_type = parts
         .headers

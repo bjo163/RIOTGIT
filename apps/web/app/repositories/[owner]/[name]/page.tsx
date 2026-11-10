@@ -745,6 +745,11 @@ export default function RepositoryPage() {
         >◎ ISSUES <small>{issues.filter((issue) => issue.state === "open").length}</small></button>
         <button
           type="button"
+          className={view === "pulls" ? "repo-tab active" : "repo-tab"}
+          onClick={() => void loadPullRequests()}
+        >⇢ PULLS <small>{pullRequests.filter((pull) => pull.state === "open" || pull.state === "merging").length}</small></button>
+        <button
+          type="button"
           className={view === "diff" ? "repo-tab active" : "repo-tab"}
           onClick={() => void loadDiff()}
         >± DIFF</button>
@@ -834,6 +839,139 @@ export default function RepositoryPage() {
             </div>
           ) : (
             <div className="repo-browser-empty">NO COMMITS FOUND FOR THIS REF.</div>
+          )}
+        </section>
+      ) : view === "pulls" ? (
+        <section className="repo-browser-panel pull-requests-workspace">
+          <form className="pr-create" onSubmit={submitPullRequest}>
+            <div className="issue-create-heading">
+              <span className="eyebrow muted">OPEN A REVIEW / NEW PULL REQUEST</span>
+              <strong>PROPOSE A CHANGE.</strong>
+            </div>
+            <label htmlFor="pr-title">TITLE</label>
+            <input
+              id="pr-title"
+              value={pullRequestTitle}
+              onChange={(event) => setPullRequestTitle(event.target.value)}
+              maxLength={200}
+              required
+              placeholder="What does this change do?"
+            />
+            <div className="pr-branch-fields">
+              <label htmlFor="pr-head">FROM BRANCH
+                <input id="pr-head" value={pullRequestHead} onChange={(event) => setPullRequestHead(event.target.value)} maxLength={200} required placeholder="feature/my-change" />
+              </label>
+              <span>→</span>
+              <label htmlFor="pr-base">INTO BRANCH
+                <input id="pr-base" value={pullRequestBase} onChange={(event) => setPullRequestBase(event.target.value)} maxLength={200} required />
+              </label>
+            </div>
+            <label htmlFor="pr-body">DESCRIPTION</label>
+            <textarea
+              id="pr-body"
+              value={pullRequestBody}
+              onChange={(event) => setPullRequestBody(event.target.value)}
+              maxLength={100000}
+              rows={3}
+              placeholder="Context, implementation notes, and verification..."
+            />
+            <button className="mini-action issue-submit" type="submit" disabled={pullRequestBusy || !pullRequestTitle.trim() || !pullRequestHead.trim() || !pullRequestBase.trim()}>
+              ＋ OPEN PULL REQUEST
+            </button>
+          </form>
+
+          <div className="pr-workspace-heading">
+            <strong>REVIEW QUEUE</strong>
+            <span>{pullRequests.filter((pull) => pull.state === "open").length} OPEN / {pullRequests.length} TOTAL</span>
+            <button type="button" className="text-link" onClick={() => void loadPullRequests()}>↻ REFRESH</button>
+          </div>
+
+          {loading ? (
+            <div className="repo-browser-empty">LOADING PULL REQUESTS...</div>
+          ) : pullRequests.length ? (
+            <div className="pr-layout">
+              <div className="pr-list">
+                {pullRequests.map((pull) => (
+                  <button
+                    type="button"
+                    className={selectedPullRequest?.number === pull.number ? "pr-list-row selected" : "pr-list-row"}
+                    key={pull.id}
+                    onClick={() => void openPullRequest(pull.number)}
+                  >
+                    <span className={`pr-state ${pull.state}`}>{pull.state === "merged" ? "✓" : pull.state === "closed" ? "×" : pull.state === "merging" ? "↻" : "⇢"}</span>
+                    <span className="pr-list-copy">
+                      <strong>#{pull.number} {pull.title}</strong>
+                      <small>{pull.head_ref} → {pull.base_ref}</small>
+                    </span>
+                    <span className="pr-list-state">{pull.state.toUpperCase()}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedPullRequest ? (
+                <article className="pr-detail">
+                  {pullRequestBusy ? <div className="pr-busy-line">UPDATING REVIEW STATE...</div> : null}
+                  <div className="pr-detail-heading">
+                    <div>
+                      <span className="eyebrow muted">PULL REQUEST / #{selectedPullRequest.number}</span>
+                      <h3>{selectedPullRequest.title}</h3>
+                      <small>{selectedPullRequest.state.toUpperCase()} · OPENED {new Date(selectedPullRequest.created_at).toLocaleDateString()} · BY {selectedPullRequest.author_id.slice(0, 8)}</small>
+                    </div>
+                    <span className={`pr-state large ${selectedPullRequest.state}`}>{selectedPullRequest.state.toUpperCase()}</span>
+                  </div>
+                  {selectedPullRequest.body ? <p className="pr-description">{selectedPullRequest.body}</p> : null}
+                  <div className="pr-ref-grid">
+                    <div><small>HEAD</small><strong>{selectedPullRequest.head_ref}</strong><code>{selectedPullRequest.head_sha.slice(0, 12)}</code></div>
+                    <span>→</span>
+                    <div><small>BASE</small><strong>{selectedPullRequest.base_ref}</strong><code>{selectedPullRequest.base_sha.slice(0, 12)}</code></div>
+                  </div>
+                  <div className="pr-detail-actions">
+                    <button type="button" className="text-link" onClick={() => void viewPullRequestDiff(selectedPullRequest)}>VIEW DIFF ↗</button>
+                    {selectedPullRequest.state === "open" ? (
+                      <>
+                        <button type="button" className="mini-action" disabled={pullRequestBusy} onClick={() => void mergePullRequest()}>MERGE PULL REQUEST</button>
+                        <button type="button" className="text-link" disabled={pullRequestBusy} onClick={() => void changePullRequestState()}>CLOSE</button>
+                      </>
+                    ) : selectedPullRequest.state === "closed" ? (
+                      <button type="button" className="text-link" disabled={pullRequestBusy} onClick={() => void changePullRequestState()}>REOPEN</button>
+                    ) : null}
+                  </div>
+                  {selectedPullRequest.state === "merging" ? (
+                    <p className="pr-merge-warning">MERGE RECOVERY IS PENDING. Refresh this pull request to reconcile the branch ref and metadata.</p>
+                  ) : null}
+                  {selectedPullRequest.state === "merged" && selectedPullRequest.merge_commit ? (
+                    <p className="pr-merged-note">MERGED AT {selectedPullRequest.merge_commit.slice(0, 12)}</p>
+                  ) : null}
+
+                  <section className="pr-review-section">
+                    <div className="pr-section-title"><strong>REVIEW HISTORY</strong><span>{pullRequestReviews.length} SUBMISSIONS</span></div>
+                    {pullRequestReviews.length ? pullRequestReviews.map((review) => (
+                      <article className="pr-review-row" key={review.id}>
+                        <span className={`review-state ${review.state}`}>{review.state === "approved" ? "✓" : review.state === "changes_requested" ? "!" : "·"}</span>
+                        <div><strong>{review.reviewer_id.slice(0, 8)} / {review.state.replace("_", " ").toUpperCase()}</strong><small>{new Date(review.submitted_at).toLocaleString()}</small>{review.body ? <p>{review.body}</p> : null}</div>
+                      </article>
+                    )) : <div className="repo-browser-empty compact">NO REVIEWS YET.</div>}
+                  </section>
+
+                  {selectedPullRequest.state === "open" ? (
+                    <form className="pr-review-form" onSubmit={submitPullRequestReview}>
+                      <label htmlFor="pr-review-state">SUBMIT REVIEW</label>
+                      <select id="pr-review-state" value={reviewState} onChange={(event) => setReviewState(event.target.value as "approved" | "changes_requested" | "comment")}>
+                        <option value="approved">APPROVE</option>
+                        <option value="changes_requested">REQUEST CHANGES</option>
+                        <option value="comment">COMMENT ONLY</option>
+                      </select>
+                      <textarea value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} maxLength={20000} rows={3} placeholder="Review notes, risks, and suggestions..." />
+                      <button className="mini-action" type="submit" disabled={pullRequestBusy}>SUBMIT REVIEW</button>
+                    </form>
+                  ) : null}
+                </article>
+              ) : (
+                <div className="pr-detail-empty">SELECT A PULL REQUEST TO REVIEW THE CHANGESET.</div>
+              )}
+            </div>
+          ) : (
+            <div className="repo-browser-empty">NO PULL REQUESTS YET. OPEN A REVIEW TO START.</div>
           )}
         </section>
       ) : view === "issues" ? (

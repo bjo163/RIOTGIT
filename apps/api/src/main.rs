@@ -703,8 +703,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/auth/login", post(auth::login))
         .route("/api/v1/auth/me", get(auth::me))
         .route("/api/v1/auth/logout", post(auth::logout))
-        .route("/api/v1/user/ssh-keys", get(auth::list_ssh_keys).post(auth::create_ssh_key))
-        .route("/api/v1/user/ssh-keys/{key_id}", axum::routing::delete(auth::delete_ssh_key))
+        .route(
+            "/api/v1/user/ssh-keys",
+            get(auth::list_ssh_keys).post(auth::create_ssh_key),
+        )
+        .route(
+            "/api/v1/user/ssh-keys/{key_id}",
+            axum::routing::delete(auth::delete_ssh_key),
+        )
         .route("/api/v1/admin/users", post(auth::create_user))
         .route(
             "/api/v1/repositories",

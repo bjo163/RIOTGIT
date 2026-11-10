@@ -28,6 +28,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo build --workspace --all-targets
+      - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh
       - name: Git smart HTTP round-trip
         run: bash scripts/smoke-git-http.sh
 
@@ -46,3 +47,33 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+  ssh:
+    name: OpenSSH Git transport
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated CI instance
+        run: |
+          cat > .env <<'EOF'
+          RIOTGIT_API_TOKEN=riotgit-ci-emergency-token-$(openssl rand -hex 16)
+          RIOTGIT_ADMIN_USERNAME=ci-admin
+          RIOTGIT_ADMIN_PASSWORD=R!OTGIT-CI-Admin-Password-1234
+          RIOTGIT_API_PORT=8787
+          RIOTGIT_WEB_PORT=3000
+          RIOTGIT_SSH_PORT=2222
+          EOF
+      - name: Build and start API plus SSH gateway
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up --build -d api ssh
+      - name: Verify SSH clone, push, permissions, and revocation
+        run: |
+          set -a
+          . ./.env
+          set +a
+          bash scripts/smoke-git-ssh.sh
+      - name: Collect service logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh logs --tail=200 api ssh
+      - name: Stop CI services and remove test volumes
+        if: always()
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh down -v --remove-orphans

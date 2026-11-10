@@ -230,7 +230,7 @@ export default function Home() {
                     <article className="repo-row" key={repo.id}>
                       <div className="repo-icon">⑂</div>
                       <div className="repo-info">
-                        <strong>{repo.owner}/{repo.name}</strong>
+                        <strong><Link href={"/repositories/" + encodeURIComponent(repo.owner) + "/" + encodeURIComponent(repo.name)}>{repo.owner}/{repo.name}</Link></strong>
                         <span>{repo.description || "No description yet"}</span>
                       </div>
                       <div className="repo-language">{repo.visibility.toUpperCase()}</div>

@@ -367,7 +367,7 @@ fn main() -> Result<()> {
         Commands::Login { server, username } => login(server, username),
         Commands::Logout => {
             let api = Api::load()?;
-            api.delete("/api/v1/auth/logout")?;
+            api.post("/api/v1/auth/logout", &json!({}))?;
             let path = config_path()?;
             if path.exists() {
                 fs::remove_file(&path)?;

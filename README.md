@@ -3,93 +3,150 @@
 > **THE UNDERGROUND CODE NETWORK**  
 > Break the rules. Own your code.
 
-R!OTGIT is a self-hosted, local-first and extensible code collaboration platform. It combines the dependable Git workflow developers already know with a bold web forge, terminal-first tooling, automation, and an optional path toward peer-to-peer collaboration.
+R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk identity and a deliberately boring core: standard Git repositories, native Git transport, explicit access control, and portable filesystem storage.
 
-**R!OTGIT is not a new Git implementation.** Git compatibility is a product invariant. Native Git repositories and protocols remain the source of truth; platform services add identity, collaboration, policy, automation, and discovery around them.
+**R!OTGIT is not a new Git implementation.** Native Git repositories and protocols remain the source of truth. R!OTGIT adds identity, permissions, repository management, and collaboration around them.
 
-![Project status](https://img.shields.io/badge/status-foundation%20phase-ccff33?style=flat-square)
+![Project status](https://img.shields.io/badge/status-single--node%20MVP%20foundation-ccff33?style=flat-square)
 ![Architecture](https://img.shields.io/badge/architecture-modular%20monolith-ff5a1f?style=flat-square)
 ![License](https://img.shields.io/badge/license-TBD-lightgrey?style=flat-square)
 
-## The idea
+## What works today
+
+- Rust + Axum API with SQLite metadata and versioned SQL migrations.
+- First-run administrator bootstrap, Argon2 password hashes, revocable bearer sessions, and admin-managed users.
+- Repository creation, listing, and access-filtered lookup.
+- Repository grants: `read`, `write`, and `admin`.
+- Native bare Git repository initialization on the filesystem.
+- Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
+- Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.
+- Docker Compose single-node profile and GitHub Actions checks.
+- Automated Git/auth smoke test: bootstrap → login → grant read → clone → reject push → revoke → reject clone → logout.
+
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42879655870).
+
+## Product pillars
 
 - **Sovereign:** self-host your code and control your data.
-- **Compatible:** use normal Git clients over SSH and HTTPS.
-- **Local-first:** keep repositories useful and portable outside the web app.
-- **Lean:** start as one API process, one web app, one database, and filesystem storage.
-- **Extensible:** add runners, mirrors, federation, P2P, and AI through explicit adapters.
-- **Human-scale:** make the terminal, API, and browser equal entry points.
+- **Compatible:** use standard Git clients over HTTP today; SSH transport is planned.
+- **Local-first:** bare repositories remain portable outside the web app.
+- **Lean:** modular monolith first, optional workers later.
+- **Extensible:** mirrors, federation, P2P, runners, and AI are adapter-based future capabilities.
+- **Human-scale:** browser, API, and terminal are intended as equal entry points.
 
-## Product surface
+## Technology baseline
 
-| Surface | Purpose |
+| Area | Current choice |
 | --- | --- |
-| Web forge | Repositories, code browser, commits, diffs, pull requests, issues, releases |
-| Git transport | Native Git over SSH and smart HTTP |
-| CLI / TUI | Fast repository, remote, and node workflows |
-| Automation | Webhooks, background jobs, isolated CI runners |
-| Network | Mirrors first; federation and P2P behind adapters |
-| AI gateway | Opt-in provider integrations and bounded repository context |
+| API | Rust stable + Axum |
+| Web | Next.js App Router + TypeScript |
+| Database | SQLite default; PostgreSQL adapter is future work |
+| Metadata | SQLx + versioned migrations |
+| Git storage | Native bare repositories on filesystem |
+| Git Smart HTTP | Native `git http-backend` behind authenticated API route |
+| Identity | Argon2 password hashes + revocable bearer sessions |
+| Browser session | HttpOnly, SameSite=Lax cookie managed by Next.js server routes |
+| Deployment | Docker Compose single-node profile |
 
-## Architecture decisions
+Native Git stays canonical. gitoxide and Radicle are research/integration directions, not required dependencies of the core MVP.
 
-1. Native Git is authoritative for commits, refs, objects, hooks, and repository integrity.
-2. Rust + Axum is the platform API and domain service boundary.
-3. Next.js App Router is the web application. Use an active Node.js LTS release.
-4. SQLite is the default small-install database; PostgreSQL is the production scale-out option.
-5. Filesystem storage is the default for bare repositories. Object storage is for artifacts and backups.
-6. Git transport is isolated from the browser/API authorization layer. No shell interpolation or arbitrary command execution.
-7. Radicle is an optional integration, not a forked storage model. Keep it disabled until compatibility and security reviews pass.
-8. Start as a modular monolith. Split workers/runners only when isolation or scale requires it.
+## Quick start — API
 
-See [Architecture](docs/ARCHITECTURE.md), [Product](docs/PRODUCT.md), [Brand](docs/BRAND.md), and [Design System](docs/DESIGN-SYSTEM.md).
+Requirements: Rust stable with edition 2024 support, Git CLI, and a writable data directory.
 
-## Repository map
-
-```text
-apps/
-  api/              Rust Axum API (foundation)
-  web/              Next.js web forge (planned)
-crates/             Shared Rust domain and infrastructure crates (planned)
-docs/               Product, brand, architecture, security, roadmap
-assets/brand/       Source SVG logo assets
-deploy/             Compose, reverse proxy, backup and service examples (planned)
-```
-
-## Development status
-
-The repository currently contains the product foundation and a minimal API bootstrap. Feature work is tracked in GitHub Issues. Documentation is a specification, not evidence that a feature is already implemented.
-
-## Quick start
-
-The initial API scaffold requires Rust stable and Cargo:
+From repository root:
 
 ```bash
+cp .env.example .env
+```
+
+Set these values in `.env`:
+- `RIOTGIT_API_TOKEN`: long random emergency administrator secret.
+- `RIOTGIT_ADMIN_USERNAME`: first local admin username.
+- `RIOTGIT_ADMIN_PASSWORD`: first local admin password (12+ bytes).
+
+The bootstrap user is created only when the database has no users. Blank bootstrap variables are ignored after first setup.
+
+Start the API:
+
+```bash
+set -a
+. ./.env
+set +a
 cargo run -p riotgit-api
 ```
 
-The API binds to `127.0.0.1:8787` by default. Override with `RIOTGIT_BIND=127.0.0.1:8787`.
+Default API: `http://127.0.0.1:8787`.
 
-The web app, Git transport, database, CLI, runners, and network adapters are tracked as implementation tasks and are not claimed as operational yet.
+## Quick start — Web
+
+In another terminal:
+
+```bash
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000/login`. Sign in with the first administrator credentials. The web app calls the API server-side and stores the session in an HttpOnly cookie; it does not keep the bearer token in browser local storage.
+
+## Docker Compose
+
+Set the same API token and first-admin bootstrap values in the root `.env`, then:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml --env-file .env up --build -d
+```
+
+The web and API host ports bind to loopback by default. Place a trusted TLS reverse proxy in front for remote access. See [Deployment](docs/DEPLOYMENT.md).
+
+## Git Smart HTTP
+
+The current Git transport is HTTP, not SSH. Example with a session token:
+
+```bash
+export RIOTGIT_TOKEN="your-session-token"
+git -c http.extraHeader="Authorization: Bearer $RIOTGIT_TOKEN" clone \
+  http://127.0.0.1:8787/git/your-user/your-repo.git
+```
+
+To push, the session must have repository `write` or `admin` permission. A `read` grant allows clone/fetch but denies push.
+
+## Product and engineering documentation
+
+- [Product narrative](docs/PRODUCT.md)
+- [Brand identity](docs/BRAND.md)
+- [Design system](docs/DESIGN-SYSTEM.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Security baseline](docs/SECURITY.md)
+- [Delivery roadmap](docs/ROADMAP.md)
+- [Implementation status](docs/IMPLEMENTATION-STATUS.md)
+- [API guide](apps/api/README.md)
+- [Deployment guide](docs/DEPLOYMENT.md)
+- [Contribution standards](CONTRIBUTING.md)
+
+## Not implemented yet
+
+SSH transport/key lifecycle, protected branches, code browser/commit diff views, pull requests/reviews/issues, CLI/TUI, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agents, PostgreSQL parity, and automated backup/restore drills remain tracked work. Do not treat R!OTGIT as a production-ready multi-user forge until those relevant security and recovery gates pass.
 
 ## Engineering rules
 
-- Keep main buildable; small, reviewable commits.
+- Keep `main` buildable; use small, reviewable commits.
 - Define contracts before parallel implementation.
-- Never store Git objects or repository contents in the relational database.
-- Use parameterized SQL and safe process APIs; never concatenate user input into shell commands.
-- Treat repository paths, hooks, archives, diffs, LFS objects, and CI artifacts as untrusted input.
-- Default to private networking and least privilege.
-- Every feature issue must include spec, UX/design rules, security notes, acceptance criteria, tests, and explicit non-goals.
-- Do not advertise P2P, Actions compatibility, or production readiness until verified by integration tests.
+- Never store Git objects in relational tables.
+- Use parameterized SQL and process argument arrays; never interpolate user input into shell commands.
+- Treat repository paths, refs, hooks, archives, diffs, LFS objects, and CI artifacts as untrusted.
+- Deny by default and enforce permissions server-side.
+- Do not advertise Actions compatibility, P2P, SSH, or production readiness until their integration tests pass.
 
 ## Brand
 
 **R!OTGIT — THE UNDERGROUND CODE NETWORK**  
 **BREAK THE RULES. OWN YOUR CODE.**
 
-The extreme visual system is intentionally loud, raw, high-contrast, and accessible. See [Brand](docs/BRAND.md) and [Design System](docs/DESIGN-SYSTEM.md).
+The visual system is extreme, raw, high-contrast, and accessible. Code, diffs, logs, and forms remain readable.
 
 ## License
 
-License selection is intentionally open pending a repository-level decision. Do not add a license header or claim open-source licensing until the owner selects and commits a license.
+License selection is intentionally open pending a repository-level decision. Do not claim open-source licensing until the owner selects and commits a license.

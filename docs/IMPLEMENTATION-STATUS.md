@@ -2,71 +2,119 @@
 
 Last updated: 2026-11-11
 
+## Verified implementation
+
+The following commit passed the full GitHub Actions pipeline:
+https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
+
+- [x] Rust formatting: `cargo fmt --all -- --check`.
+- [x] Rust compile: `cargo check --workspace --all-targets`.
+- [x] Clippy: `cargo clippy --workspace --all-targets -- -D warnings`.
+- [x] Rust tests: `cargo test --workspace`.
+- [x] API build: `cargo build -p riotgit-api`.
+- [x] Web dependency install, TypeScript typecheck, ESLint, and Next.js production build.
+- [x] End-to-end auth/Git HTTP smoke test.
+
 ## Implemented and committed
 
+### Product and engineering foundation
 - [x] Product narrative, positioning, brand identity, logo SVGs, and product design system.
-- [x] Architecture baseline, threat model, delivery roadmap, contribution standards, and issue templates.
-- [x] Rust workspace and Axum API bootstrap.
-- [x] SQLite database initialization with versioned migration.
-- [x] Database-backed repository metadata.
-- [x] Native Git bare-repository initialization with generated opaque storage IDs and staging activation.
-- [x] Bearer-token guard for repository administration and Git smart HTTP (instance-wide admin credential).
-- [x] Repository create, list, and lookup API.
-- [x] Liveness and database/storage readiness endpoints.
-- [x] Next.js App Router cockpit design preview.
-- [x] GitHub Actions Rust and web quality workflow.
+- [x] Architecture, threat model, roadmap, contribution standards, issue templates, and pull request template.
+- [x] Rust workspace and Axum API.
+- [x] Structured error responses and liveness/readiness routes.
+- [x] SQLite initialization with versioned migrations.
 
-## Verified at foundation stage
+### Identity and access
+- [x] First-run administrator bootstrap from environment variables.
+- [x] Argon2 password hashing and verification.
+- [x] User login and 7-day opaque bearer sessions.
+- [x] Session revocation via logout.
+- [x] Admin-managed user creation with `admin` and `member` roles.
+- [x] Repository-level `read`, `write`, and `admin` grants with grant/revoke API.
+- [x] Read/write access checks applied to Git Smart HTTP.
+- [x] Instance token retained as an emergency global-admin credential.
 
-The starter UI/API commit passed GitHub Actions:
-- Rust formatting, check, Clippy, and tests.
-- Web dependency install, TypeScript, ESLint, and Next.js production build.
+### Git core
+- [x] SQLite-backed repository metadata.
+- [x] Bare Git repository initialization using native Git.
+- [x] Opaque storage IDs and staged activation under the configured repository root.
+- [x] Duplicate owner/name conflict response.
+- [x] Name validation against traversal and unsafe characters.
+- [x] Authenticated Git Smart HTTP discovery, upload-pack, and receive-pack.
+- [x] Request body cap (64 MiB) and backend execution timeout (120 seconds).
+- [x] Git CLI round-trip: create repository → push → clone → compare file.
+- [x] Permission smoke: read-only clone succeeds, push is denied, revoked grant blocks later clone.
 
-See the CI run: https://github.com/bjo163/RIOTGIT/actions/runs/42872536139
+### Web application
+- [x] Next.js App Router application and R!OTGIT design system.
+- [x] Login, logout, and session lookup through server-side route handlers.
+- [x] HttpOnly, SameSite=Lax browser session cookie; bearer token is not stored in local storage.
+- [x] Live user and repository dashboard, permission-filtered list, and honest empty states.
+- [x] Repository creation screen backed by the API.
+- [x] Docker Compose internal API routing.
 
-## Implemented in the current Git Core increment
+### Operations
+- [x] Dockerfiles and single-node Docker Compose profile.
+- [x] Non-root API runtime, read-only root filesystem, loopback host port bindings, persistent volume, and health checks.
+- [x] GitHub Actions CI covering Rust, web, and Git/auth smoke workflows.
 
-Verified by CI run https://github.com/bjo163/RIOTGIT/actions/runs/42876569801 on commit `a55d7670890b80b6e5dc8a301b37ddcc83a64ff3`:
-- SQLite-backed repository metadata.
-- Native Git bare repository creation via controlled argument-based process invocation.
-- Duplicate repository conflict response.
-- Name validation against traversal and unsafe path characters.
-- Configurable storage/database/Git executable.
-- API token guard for repository management.
+## Remaining work
 
-## Not yet implemented
-
-- [x] Local users, Argon2 password hashing, bootstrap administrator, revocable bearer sessions, and admin-managed user creation.
-- [x] Repository read/write/admin grants and permission checks in Git Smart HTTP (pending end-to-end CI verification).
-- [ ] SSH key lifecycle and organization/team RBAC.
-- [ ] Git SSH forced-command transport.
-- [ ] Per-user/read-only Git permissions and branch-protection checks at receive-pack.
-- [ ] Large-pack streaming and bounded memory behavior for very large repositories.
-- [ ] SSH forced-command transport and key revocation.
-- [ ] Confirm auth smoke test in CI: read-only clone, push denial, access revocation, and session logout.
+### Git and security
+- [ ] OpenSSH forced-command Git transport and SSH key registration/revocation.
+- [ ] Protected branch rules and server-side receive-pack enforcement.
+- [ ] Large pack streaming/backpressure; current HTTP gateway buffers bounded request/response bodies.
 - [ ] Git LFS.
-- [ ] Live web API integration and real repository views.
-- [ ] Code tree/blob/commit/diff browser.
-- [ ] Issues, pull requests, reviews, branch protections, merge engine.
+- [ ] Login/API rate limiting, origin/CSRF defense review, token rotation, and security hardening.
+- [ ] PostgreSQL adapter and cross-database integration suite.
+
+### Forge collaboration
+- [ ] Repository tree/blob browser, commit history, blame, and diff view.
+- [ ] Pull requests, reviews, merge checks, merge engine, and branch protection UI.
+- [ ] Issues, labels, milestones, comments, and notifications.
 - [ ] CLI/TUI.
-- [ ] Durable jobs, webhooks, isolated CI runners.
-- [ ] Mirrors, federation, Radicle/P2P.
-- [ ] AI gateway and scoped agents.
-- [ ] Production deployment, backup/restore drills, upgrade/rollback runbook.
-- [ ] Reproducible committed lockfiles.
 
-The API token is a temporary single-instance bootstrap guard, not a substitute for user sessions or granular authorization. The web cockpit remains a clearly labeled design preview and does not show live repository data yet.
+### Automation and network
+- [ ] Durable background queue and signed webhook delivery.
+- [ ] Isolated CI runner and a clearly scoped workflow subset.
+- [ ] Mirrors, federation contracts, and Radicle/P2P adapter.
+- [ ] Opt-in AI gateway and repository-scoped agents.
 
-## Current API run
+### Production readiness
+- [ ] Committed Cargo/npm lockfiles and frozen CI installs.
+- [ ] Automated database + repository backup and restore drill.
+- [ ] Upgrade/rollback runbook validated against data snapshots.
+- [ ] Container build/compose smoke test in CI.
+- [ ] Load, soak, disk-full, and recovery tests.
+- [ ] Full security review and release checklist.
+
+## Important limitations
+
+- Smart HTTP is implemented; SSH is not.
+- Identity and repository-level grants work, but there is no organization/team model yet.
+- Protected-branch policy is not enforced yet.
+- Web shows live account/repository data, but does not yet browse repository contents or collaboration objects.
+- CI success verifies this foundation and smoke paths only. It does not make R!OTGIT a complete or production-hardened Git forge.
+- PostgreSQL, P2P/federation, runners, and AI remain planned.
+
+## Local run
+
+API:
 
 ```bash
 cp .env.example .env
-# Set RIOTGIT_API_TOKEN to a long random secret.
+# Set RIOTGIT_API_TOKEN, RIOTGIT_ADMIN_USERNAME and RIOTGIT_ADMIN_PASSWORD.
+set -a && . ./.env && set +a
 cargo run -p riotgit-api
 ```
 
-See [API README](../apps/api/README.md) for PowerShell instructions, routes, and examples.
+Web (another terminal):
 
-## Status language
+```bash
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev
+```
 
-Do not describe R!OTGIT as a complete Git forge or production-ready product until authenticated Git transport, identity/RBAC, collaboration workflows, backup/restore, and the corresponding integration/security gates pass.
+See [API README](../apps/api/README.md) and [Deployment](DEPLOYMENT.md).

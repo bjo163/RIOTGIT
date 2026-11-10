@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     number INTEGER NOT NULL CHECK (number > 0),
     title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 200),
     body TEXT,
-    state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'closed', 'merged')),
+    state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'closed', 'merging', 'merged')),
     head_ref TEXT NOT NULL CHECK (length(head_ref) BETWEEN 1 AND 200),
     base_ref TEXT NOT NULL CHECK (length(base_ref) BETWEEN 1 AND 200),
     head_sha TEXT NOT NULL CHECK (length(head_sha) BETWEEN 40 AND 64),

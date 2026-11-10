@@ -91,7 +91,10 @@ fn valid_segment(value: &str) -> bool {
 fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
     (method == Method::GET
         && path == "info/refs"
-        && matches!(query, "service=git-upload-pack" | "service=git-receive-pack"))
+        && matches!(
+            query,
+            "service=git-upload-pack" | "service=git-receive-pack"
+        ))
         || (method == Method::POST
             && query.is_empty()
             && matches!(path, "git-upload-pack" | "git-receive-pack"))

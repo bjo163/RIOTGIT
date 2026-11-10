@@ -34,6 +34,12 @@ pub(crate) struct CommitsQuery {
     limit: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct DiffQuery {
+    base: Option<String>,
+    head: Option<String>,
+}
+
 #[derive(Debug, FromRow)]
 struct RepositoryContext {
     id: String,
@@ -86,6 +92,15 @@ pub(crate) struct CommitListResponse {
     repository: String,
     reference: String,
     commits: Vec<CommitEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DiffResponse {
+    owner: String,
+    repository: String,
+    base: String,
+    head: String,
+    diff: String,
 }
 
 fn valid_reference(value: &str) -> bool {
@@ -487,6 +502,46 @@ pub(crate) async fn commits(
         repository: name,
         reference,
         commits: entries,
+    }))
+}
+
+
+pub(crate) async fn diff(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((owner, name)): AxumPath<(String, String)>,
+    Query(query): Query<DiffQuery>,
+) -> Result<Json<DiffResponse>, ApiError> {
+    let repository = load_repository(&state, &headers, &owner, &name).await?;
+    let base_reference = query.base.unwrap_or_else(|| "main".to_owned());
+    let head_reference = query.head.unwrap_or_else(|| "HEAD".to_owned());
+    let base_commit = resolve_commit(&state, &repository, &base_reference).await?;
+    let head_commit = resolve_commit(&state, &repository, &head_reference).await?;
+
+    let output = run_git(
+        &state,
+        &repository.storage_key,
+        &[
+            "diff".to_owned(),
+            "--no-ext-diff".to_owned(),
+            "--no-textconv".to_owned(),
+            "--no-color".to_owned(),
+            "--no-renames".to_owned(),
+            "--unified=3".to_owned(),
+            base_commit,
+            head_commit,
+            "--".to_owned(),
+        ],
+        2 * 1024 * 1024,
+    )
+    .await?;
+
+    Ok(Json(DiffResponse {
+        owner,
+        repository: name,
+        base: base_reference,
+        head: head_reference,
+        diff: String::from_utf8_lossy(&output).into_owned(),
     }))
 }
 

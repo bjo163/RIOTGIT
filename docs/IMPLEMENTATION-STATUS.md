@@ -69,9 +69,9 @@ https://github.com/bjo163/RIOTGIT/actions/runs/42879655870
 - [ ] PostgreSQL adapter and cross-database integration suite.
 
 ### Forge collaboration
-- [ ] Repository tree/blob browser, commit history, blame, and diff view.
+- [x] Repository tree/blob browser and commit history.\n- [ ] Blame and diff view.
 - [ ] Pull requests, reviews, merge checks, merge engine, and branch protection UI.
-- [ ] Issues, labels, milestones, comments, and notifications.
+- [x] Repository Issues: create/list/update/close, comments, repository access checks, and browser tracker UI.\n- [ ] Labels, milestones, notifications, and issue detail timeline.
 - [ ] CLI/TUI.
 
 ### Automation and network

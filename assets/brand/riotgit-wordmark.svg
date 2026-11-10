@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 150" role="img" aria-labelledby="title">
+  <title id="title">R!OTGIT — The Underground Code Network</title>
+  <rect width="720" height="150" fill="none"/>
+  <g font-family="Impact, 'Arial Narrow', system-ui, sans-serif" font-weight="900" font-style="italic" letter-spacing="-5">
+    <text x="14" y="112" font-size="116" fill="#D7FF38">R</text>
+    <path d="M129 20h18l-4 78h-18z" fill="#FF5A1F"/>
+    <circle cx="134" cy="119" r="10" fill="#FF5A1F"/>
+    <text x="158" y="112" font-size="116" fill="#F1F0E9">OTGIT</text>
+  </g>
+  <path d="M16 132h680" stroke="#FF5A1F" stroke-width="5"/>
+  <path d="M16 140h160" stroke="#D7FF38" stroke-width="3"/>
+</svg>

@@ -17,18 +17,24 @@ export async function GET(request: Request) {
   if (!SEGMENT_PATTERN.test(owner) || !SEGMENT_PATTERN.test(name)) {
     return NextResponse.json({ error: "A valid owner and repository name are required." }, { status: 400 });
   }
-  if (!["tree", "blob", "commits"].includes(resource ?? "")) {
-    return NextResponse.json({ error: "Choose tree, blob, or commits." }, { status: 400 });
+  if (!["tree", "blob", "commits", "diff"].includes(resource ?? "")) {
+    return NextResponse.json({ error: "Choose tree, blob, commits, or diff." }, { status: 400 });
   }
   if (reference.length > 256 || path.length > 2048) {
     return NextResponse.json({ error: "Reference or path is too long." }, { status: 400 });
   }
 
-  const query = new URLSearchParams({ reference });
-  if (resource !== "commits") query.set("path", path);
-  if (resource === "commits") {
-    query.set("limit", url.searchParams.get("limit") ?? "30");
+  const base = url.searchParams.get("base") ?? "main";
+  const head = url.searchParams.get("head") ?? "HEAD";
+  if (base.length > 256 || head.length > 256) {
+    return NextResponse.json({ error: "Diff references are too long." }, { status: 400 });
   }
+
+  const query = resource === "diff"
+    ? new URLSearchParams({ base, head })
+    : new URLSearchParams({ reference });
+  if (resource === "tree" || resource === "blob") query.set("path", path);
+  if (resource === "commits") query.set("limit", url.searchParams.get("limit") ?? "30");
 
   try {
     const upstream = await fetch(

@@ -271,7 +271,7 @@ pub(crate) async fn tree(
 
     let mut entries = Vec::new();
     for record in output.split(|byte| *byte == 0).filter(|record| !record.is_empty()) {
-        let Some(tab_index) = record.iter().position(|byte| *byte == b'\\t') else {
+        let Some(tab_index) = record.iter().position(|byte| *byte == b'\t') else {
             continue;
         };
         let metadata =

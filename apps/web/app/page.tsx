@@ -156,6 +156,7 @@ export default function Home() {
         <header className="topbar">
           <div className="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>OVERVIEW</strong></div>
           <div className="top-actions">
+            <Link className="search-button" href="/settings/ssh-keys"><span>⌘</span> SSH keys</Link>
             <Link className="search-button" href="/repositories/new"><span>＋</span> New repository</Link>
             <button
               className="icon-button signout-button"

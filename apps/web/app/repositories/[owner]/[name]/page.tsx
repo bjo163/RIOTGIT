@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 type TreeEntry = {
   name: string;
@@ -39,6 +39,18 @@ type CommitsResult = {
   commits: CommitEntry[];
 };
 
+type IssueEntry = {
+  id: string;
+  number: number;
+  title: string;
+  body: string | null;
+  state: "open" | "closed";
+  author_id: string;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+};
+
 export default function RepositoryPage() {
   const params = useParams<{ owner: string; name: string }>();
   const owner = params.owner;
@@ -48,7 +60,10 @@ export default function RepositoryPage() {
   const [tree, setTree] = useState<TreeResult | null>(null);
   const [blob, setBlob] = useState<BlobResult | null>(null);
   const [commits, setCommits] = useState<CommitEntry[]>([]);
-  const [view, setView] = useState<"code" | "history">("code");
+  const [issues, setIssues] = useState<IssueEntry[]>([]);
+  const [issueTitle, setIssueTitle] = useState("");
+  const [issueBody, setIssueBody] = useState("");
+  const [view, setView] = useState<"code" | "history" | "issues">("code");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -141,6 +156,66 @@ export default function RepositoryPage() {
     }
   }, [owner, name, reference]);
 
+  const loadIssues = useCallback(async () => {
+    setView("issues");
+    setLoading(true);
+    setError("");
+    try {
+      const query = new URLSearchParams({ owner, name });
+      const response = await fetch("/api/repository-issues?" + query.toString(), {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as IssueEntry[] | { error?: string };
+      if (!response.ok || !Array.isArray(payload)) {
+        setError(!Array.isArray(payload) ? (payload.error ?? "Could not load issues.") : "Could not load issues.");
+        return;
+      }
+      setIssues(payload);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setLoading(false);
+    }
+  }, [owner, name]);
+
+  async function submitIssue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const response = await fetch("/api/repository-issues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner, name, title: issueTitle, body: issueBody }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as IssueEntry & { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Issue could not be created.");
+      return;
+    }
+    setIssueTitle("");
+    setIssueBody("");
+    await loadIssues();
+  }
+
+  async function toggleIssue(issue: IssueEntry) {
+    setError("");
+    const response = await fetch("/api/repository-issues", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        owner,
+        name,
+        number: issue.number,
+        state: issue.state === "open" ? "closed" : "open",
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as IssueEntry & { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "Issue state could not be updated.");
+      return;
+    }
+    setIssues((current) => current.map((item) => item.number === issue.number ? payload : item));
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadTree("", "HEAD");
@@ -189,6 +264,11 @@ export default function RepositoryPage() {
           className={view === "history" ? "repo-tab active" : "repo-tab"}
           onClick={() => void loadHistory()}
         >◷ HISTORY</button>
+        <button
+          type="button"
+          className={view === "issues" ? "repo-tab active" : "repo-tab"}
+          onClick={() => void loadIssues()}
+        >◎ ISSUES <small>{issues.filter((issue) => issue.state === "open").length}</small></button>
         <span className="repo-ref-label">
           REF
           <input
@@ -256,7 +336,7 @@ export default function RepositoryPage() {
             </div>
           )}
         </section>
-      ) : (
+      ) : view === "history" ? (
         <section className="repo-browser-panel">
           {loading ? (
             <div className="repo-browser-empty">READING COMMIT HISTORY...</div>
@@ -275,6 +355,64 @@ export default function RepositoryPage() {
             </div>
           ) : (
             <div className="repo-browser-empty">NO COMMITS FOUND FOR THIS REF.</div>
+          )}
+        </section>
+      ) : (
+        <section className="repo-browser-panel issues-workspace">
+          <form className="issue-create" onSubmit={submitIssue}>
+            <div className="issue-create-heading">
+              <span className="eyebrow muted">OPEN A SIGNAL / NEW ISSUE</span>
+              <strong>WHAT NEEDS TO BE BUILT?</strong>
+            </div>
+            <label htmlFor="issue-title">TITLE</label>
+            <input
+              id="issue-title"
+              value={issueTitle}
+              onChange={(event) => setIssueTitle(event.target.value)}
+              maxLength={200}
+              required
+              placeholder="Describe the problem in one clear line"
+            />
+            <label htmlFor="issue-body">DETAILS</label>
+            <textarea
+              id="issue-body"
+              value={issueBody}
+              onChange={(event) => setIssueBody(event.target.value)}
+              maxLength={100000}
+              rows={4}
+              placeholder="Context, expected behavior, and acceptance criteria..."
+            />
+            <button className="mini-action issue-submit" type="submit" disabled={!issueTitle.trim()}>
+              ＋ CREATE ISSUE
+            </button>
+          </form>
+          <div className="issues-heading">
+            <strong>ISSUE TRACKER</strong>
+            <span>{issues.filter((issue) => issue.state === "open").length} OPEN / {issues.length} TOTAL</span>
+            <button type="button" className="text-link" onClick={() => void loadIssues()}>↻ REFRESH</button>
+          </div>
+          {loading ? (
+            <div className="repo-browser-empty">LOADING ISSUE TRACKER...</div>
+          ) : issues.length ? (
+            <div className="issue-list">
+              {issues.map((issue) => (
+                <article className="issue-row" key={issue.id}>
+                  <span className={issue.state === "open" ? "issue-state open" : "issue-state closed"}>
+                    {issue.state === "open" ? "◎" : "✓"}
+                  </span>
+                  <div className="issue-main">
+                    <strong>#{issue.number} {issue.title}</strong>
+                    <small>{issue.state.toUpperCase()} · OPENED {new Date(issue.created_at).toLocaleDateString()}</small>
+                    {issue.body ? <p>{issue.body}</p> : null}
+                  </div>
+                  <button type="button" className="text-link issue-toggle" onClick={() => void toggleIssue(issue)}>
+                    {issue.state === "open" ? "CLOSE" : "REOPEN"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="repo-browser-empty">NO ISSUES YET. FIND THE FIRST THING TO FIX.</div>
           )}
         </section>
       )}

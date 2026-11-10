@@ -18,12 +18,15 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Repository creation, listing, and access-filtered lookup.
 - Repository grants: `read`, `write`, and `admin`.
 - Native bare Git repository initialization on the filesystem.
+- Repository tree/blob browsing, commit history, and bounded base/head diff view.
+- Issues, comments, labels, and milestones in the repository workspace.
+- Server-side branch protection for Git Smart HTTP receive-pack, with a settings UI.
 - Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
 - Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.
 - Docker Compose single-node profile and GitHub Actions checks.
 - Automated Git/auth smoke test: bootstrap → login → grant read → clone → reject push → revoke → reject clone → logout.
 
-See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42879655870).
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42893061450).
 
 ## Product pillars
 
@@ -128,7 +131,7 @@ To push, the session must have repository `write` or `admin` permission. A `read
 
 ## Not implemented yet
 
-SSH transport/key lifecycle, protected branches, code browser/commit diff views, pull requests/reviews/issues, CLI/TUI, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agents, PostgreSQL parity, and automated backup/restore drills remain tracked work. Do not treat R!OTGIT as a production-ready multi-user forge until those relevant security and recovery gates pass.
+SSH transport/key lifecycle, pull requests/reviews/merge engine, CLI/TUI, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agents, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, and automated backup/restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. Do not treat R!OTGIT as a production-ready multi-user forge until those relevant security and recovery gates pass.
 
 ## Engineering rules
 

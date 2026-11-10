@@ -2,19 +2,17 @@
 
 ## Current scope
 
-The Compose profile runs the Rust API and Next.js web app on one machine. It is a development/early-preview profile; it is not yet a production-hardened Git forge.
+The Compose profile runs the Rust API and Next.js web application on one machine. It now includes SQLite metadata, local identity/sessions, repository-level permissions, native bare Git storage, authenticated Git Smart HTTP, browser code views, Issues/labels/milestones, Pull Requests/reviews/merge, and branch protection for Smart HTTP pushes.
 
-The API supports SQLite metadata, local users and sessions, repository creation, repository-level read/write/admin grants, and authenticated Git Smart HTTP clone/fetch/push. The web app supports login/logout, a live repository dashboard, and repository creation. The activity feed remains an honest placeholder because the events/PR/issue modules are not built.
-
-It does **not** yet provide Git-over-SSH, protected-branch enforcement, organization/team RBAC, repository code browsing, PR/issues, CI runners, P2P, or automated backup/restore. Do not expose this as a fully featured production forge until the relevant security and recovery gates are complete.
+This is an early self-hosted release foundation, not a claim of complete production hardening. OpenSSH Git transport, large-pack streaming, Git LFS, PostgreSQL, CI runners, federation/P2P, and AI agent execution are not enabled.
 
 ## Requirements
 
 - Docker Engine and Docker Compose plugin.
-- A reverse proxy with TLS for remote access.
+- A trusted reverse proxy with TLS for remote browser access.
 - A long random emergency API token.
-- First-run administrator username and password (both set together).
-- Persistent volume storage and an independently tested backup destination.
+- First-run administrator username/password (configured together).
+- Persistent Docker volume and encrypted off-host backup destination.
 
 ## Start
 
@@ -24,25 +22,25 @@ From repository root:
 cp .env.example .env
 ```
 
-Set `RIOTGIT_API_TOKEN` to a unique random value. For the first startup, uncomment and set `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD` in `.env`. The password must contain at least 12 bytes. These bootstrap values are ignored when blank and are used only if the database has no users. The instance token remains a global emergency-admin credential.
+Set `RIOTGIT_API_TOKEN` to a unique random secret. For first startup, uncomment and set `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD`; the password must contain at least 12 bytes. Bootstrap runs only when no users exist. The API token remains an emergency instance-admin credential.
 
-Generate secrets, for example:
+Generate a token:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Then:
+Start the stack:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml --env-file .env up --build -d
 ```
 
-The services bind to loopback only by default:
+Host ports bind to loopback by default:
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:8787`
 
-The Next.js server connects to the API over the internal Compose network using `http://api:8787`. Put a trusted TLS reverse proxy in front for remote browser access. Do not expose port 8787 directly to the public internet.
+Next.js talks to the API over the internal Compose network (`http://api:8787`). Put a trusted TLS reverse proxy in front of the web service. Do not expose the API port directly to the public internet.
 
 ## Smoke test
 
@@ -52,52 +50,61 @@ curl --fail http://127.0.0.1:8787/health/ready
 curl --fail http://127.0.0.1:8787/api/v1/meta
 ```
 
-Open `http://127.0.0.1:3000/login` and sign in with the first administrator credentials. Use the web interface to create repositories and manage your own repository workspace. For Git HTTP CLI examples and permissions, see [API README](../apps/api/README.md).
-
-Use `docker compose -f deploy/compose/docker-compose.yml logs -f api web` to inspect service logs. Never post logs containing credentials into public issues.
+Open `http://127.0.0.1:3000/login`. Create repositories and collaborate through the web interface or standard Git over authenticated HTTPS. See [API README](../apps/api/README.md) and [CLI guide](../apps/cli/README.md).
 
 ## Persistent data
 
-The `riotgit-data` volume stores:
-- `riotgit.db` — SQLite metadata, users, sessions, grants, and audit records;
-- `repositories/` — bare Git repositories and storage housekeeping directories.
+The `riotgit-data` volume stores both:
+- `riotgit.db` — SQLite metadata, users, sessions, repository grants, issue/PR metadata, and audit records;
+- `repositories/` — bare Git repositories and Git storage housekeeping directories.
 
-Do not edit or delete these files while the service is running. A consistent backup must include the SQLite database and repository volume together. The automated backup/restore runbook is still outstanding (Issue #16).
+Do not edit or delete these files while services are running. A recovery point must capture the full data volume, not only the database or repository directory.
+
+## Backup and restore
+
+Use the maintained scripts from the repository root:
+
+```bash
+bash scripts/backup.sh
+bash scripts/restore.sh ./backups/riotgit-data-YYYYMMDDTHHMMSSZ.tar.gz
+```
+
+The backup script stops API/web while archiving the complete volume and writes a checksum. The restore script validates basic archive paths, requests explicit confirmation, creates a pre-restore safety snapshot, replaces the volume, then restarts services. Backups should be copied to encrypted off-host storage. A backup is not proven until a restore drill succeeds on a separate test environment. See [Backup & Restore Runbook](BACKUP-RESTORE.md).
 
 ## Configuration
 
 | Variable | Meaning |
 | --- | --- |
 | `RIOTGIT_API_TOKEN` | Required emergency instance-admin bearer token |
-| `RIOTGIT_ADMIN_USERNAME` | First local administrator username; optional after initial bootstrap |
-| `RIOTGIT_ADMIN_PASSWORD` | First local administrator password (12+ bytes); optional after initial bootstrap |
-| `RIOTGIT_API_PORT` | Loopback host port for API (default 8787) |
-| `RIOTGIT_WEB_PORT` | Loopback host port for web (default 3000) |
-| `RIOTGIT_API_URL` | Internal server-side web-to-API URL (Compose sets `http://api:8787`) |
-| `RIOTGIT_BIND` | API listener (Compose sets `0.0.0.0:8787` inside container) |
-| `RIOTGIT_DATABASE_PATH` | SQLite path inside API volume |
-| `RIOTGIT_STORAGE_ROOT` | Bare repository storage path |
+| `RIOTGIT_ADMIN_USERNAME` | First local administrator username; used only on first bootstrap |
+| `RIOTGIT_ADMIN_PASSWORD` | First local administrator password (12+ bytes) |
+| `RIOTGIT_API_PORT` | Loopback API host port (default 8787) |
+| `RIOTGIT_WEB_PORT` | Loopback web host port (default 3000) |
+| `RIOTGIT_API_URL` | Internal web-to-API URL (Compose sets `http://api:8787`) |
+| `RIOTGIT_BIND` | API listener (Compose sets `0.0.0.0:8787` in container) |
+| `RIOTGIT_DATABASE_PATH` | SQLite metadata database path |
+| `RIOTGIT_STORAGE_ROOT` | Bare repository storage root |
 | `RIOTGIT_GIT_BIN` | Git executable name or absolute path |
 
 ## Upgrade and rollback
 
-There is no automated upgrade/rollback orchestration yet. Before upgrading:
-1. Stop writes.
-2. Snapshot the database and repository volume together.
-3. Pull/build the reviewed commit.
-4. Start the new version and verify health.
-5. Exercise session login and Git clone/push checks.
-6. Retain the previous image and snapshot until validation finishes.
+Before upgrading:
+1. Stop accepting new writes.
+2. Create and verify a full-volume backup.
+3. Pull/build a reviewed commit.
+4. Start the new version and verify readiness.
+5. Test login, repository listing, clone/fetch/push, and one collaboration workflow.
+6. Retain the previous image and pre-upgrade backup until validation is complete.
 
-Do not roll back only the database or only repository storage.
+Do not roll back only the database or only repository storage. Migrations are versioned and applied on API startup; check migration compatibility before using a downgraded image.
 
 ## Security notes
 
-- Treat `RIOTGIT_API_TOKEN` like a root secret; it grants emergency instance-admin access.
-- Local accounts use Argon2 password hashes and revocable seven-day bearer sessions.
-- Browser sessions use HttpOnly and SameSite=Lax cookies managed by Next.js server routes.
-- Repository grants support `read`, `write`, and `admin`; protected-branch enforcement remains outstanding.
-- Login rate limiting and full security hardening remain outstanding; use a trusted reverse proxy and firewall.
-- Keep the named data volume private and persistent.
-- Containers use a non-root user and a read-only root filesystem.
-- CI runner and P2P services are intentionally absent from this profile.
+- Treat `RIOTGIT_API_TOKEN` as a root secret; it grants emergency instance-admin access.
+- Local account passwords use Argon2 hashes; bearer sessions are revocable and expire after seven days.
+- Browser sessions use HttpOnly/SameSite cookies and mutating web API calls are guarded by the Next.js same-origin proxy.
+- Login failures are throttled per normalized username; IP-aware rate limiting and proxy-trust hardening remain outstanding.
+- SSH public keys can be registered, listed, and revoked, but registering a key does not enable SSH clone/push. OpenSSH forced-command transport is still outstanding.
+- Branch protection is enforced for Git Smart HTTP receive-pack; do not assume it covers SSH until SSH transport is implemented.
+- Containers run as non-root with read-only root filesystems and loopback host bindings.
+- CI runner, federation/P2P, and AI execution services are intentionally absent from this Compose profile.

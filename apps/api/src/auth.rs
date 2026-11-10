@@ -156,8 +156,12 @@ pub(crate) async fn bootstrap_admin(pool: &SqlitePool) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let username = std::env::var("RIOTGIT_ADMIN_USERNAME").ok();
-    let password = std::env::var("RIOTGIT_ADMIN_PASSWORD").ok();
+    let username = std::env::var("RIOTGIT_ADMIN_USERNAME")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let password = std::env::var("RIOTGIT_ADMIN_PASSWORD")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
 
     match (username, password) {
         (None, None) => {

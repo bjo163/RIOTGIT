@@ -11,7 +11,7 @@ The API currently supports:
 - repository creation that initializes a native bare Git directory;
 - authenticated repository list and lookup.
 
-It provides authenticated Git smart HTTP clone/fetch/push using one instance-level administrator token, but does **not** yet provide Git-over-SSH, per-user/read-only permissions, branch protection at receive-pack, full user accounts/RBAC, collaboration, CI runners, or P2P. The web cockpit still contains sample preview records. Do not expose it as a completed service for team source hosting until the remaining P0/P1 security and transport issues are closed.
+It provides local user accounts with Argon2 password hashing, revocable bearer sessions, admin-managed users, repository `read`/`write`/`admin` grants, and authenticated Git Smart HTTP clone/fetch/push. The instance token remains an emergency global-admin credential. It does **not** yet provide Git-over-SSH, protected-branch enforcement, full organization/team RBAC, collaboration (PR/issues), CI runners, or P2P. The web cockpit still contains sample preview records. Do not expose it as a completed service for team source hosting until the remaining P0/P1 security and transport issues are closed.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ From repository root:
 cp .env.example .env
 ```
 
-Set `RIOTGIT_API_TOKEN` to a unique random value. For the first startup, also set `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD` in `.env` to create the first local admin; use a unique password of at least 12 bytes. These bootstrap credentials are only used when the database has no users. For the API emergency token, generate a unique random value with:
+Set `RIOTGIT_API_TOKEN` to a unique random value. For the first startup, uncomment and set `RIOTGIT_ADMIN_USERNAME` and `RIOTGIT_ADMIN_PASSWORD` in `.env` to create the first local admin; use a unique password of at least 12 bytes. The bootstrap values are ignored when left blank and are only used when the database has no users. For the API emergency token, generate a unique random value with:
 
 ```bash
 openssl rand -hex 32

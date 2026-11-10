@@ -36,12 +36,14 @@ Verified by CI run https://github.com/bjo163/RIOTGIT/actions/runs/42876569801 on
 
 ## Not yet implemented
 
-- [ ] Per-user authentication, sessions, SSH key lifecycle, organization/team RBAC.
+- [x] Local users, Argon2 password hashing, bootstrap administrator, revocable bearer sessions, and admin-managed user creation.
+- [x] Repository read/write/admin grants and permission checks in Git Smart HTTP (pending end-to-end CI verification).
+- [ ] SSH key lifecycle and organization/team RBAC.
 - [ ] Git SSH forced-command transport.
 - [ ] Per-user/read-only Git permissions and branch-protection checks at receive-pack.
 - [ ] Large-pack streaming and bounded memory behavior for very large repositories.
 - [ ] SSH forced-command transport and key revocation.
-- [ ] Authenticated Git HTTP integration test for read-only vs write permissions (current smoke test uses the instance-admin token).
+- [ ] Confirm auth smoke test in CI: read-only clone, push denial, access revocation, and session logout.
 - [ ] Git LFS.
 - [ ] Live web API integration and real repository views.
 - [ ] Code tree/blob/commit/diff browser.

@@ -12,6 +12,8 @@ repository = "https://github.com/bjo163/RIOTGIT"
 anyhow = "1"
 argon2 = "0.5"
 axum = "0.8"
+base64 = "0.22"
+base64 = "0.22"
 hex = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

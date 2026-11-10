@@ -1,0 +1,344 @@
+use std::{env, process::Stdio, time::Duration};
+
+use axum::{
+    body::{Body, to_bytes},
+    extract::{Path as AxumPath, Request, State},
+    http::{
+        HeaderMap, HeaderName, HeaderValue, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE, WWW_AUTHENTICATE},
+    },
+    response::Response,
+};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
+use tokio::{fs, io::AsyncWriteExt, process::Command, time::timeout};
+use tracing::{error, warn};
+
+use crate::AppState;
+
+fn token_matches(token: &str, state: &AppState) -> bool {
+    let Some(expected) = state.api_token_digest else {
+        return false;
+    };
+    let actual: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+    bool::from(expected.ct_eq(&actual))
+}
+
+fn authenticated(headers: &HeaderMap, state: &AppState) -> bool {
+    let Some(auth) = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+
+    if let Some(token) = auth.strip_prefix("Bearer ") {
+        return token_matches(token, state);
+    }
+
+    if let Some(encoded) = auth.strip_prefix("Basic ") {
+        let Ok(decoded) = STANDARD.decode(encoded) else {
+            return false;
+        };
+        let Ok(credentials) = std::str::from_utf8(&decoded) else {
+            return false;
+        };
+        let Some((_, password)) = credentials.split_once(':') else {
+            return false;
+        };
+        return token_matches(password, state);
+    }
+
+    false
+}
+
+fn plain_response(status: StatusCode, message: &'static str) -> Response {
+    Response::builder()
+        .status(status)
+        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from(format!("{message}\n")))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn unauthorized() -> Response {
+    Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .header(WWW_AUTHENTICATE, "Basic realm=\"R!OTGIT Git\", charset=\"UTF-8\"")
+        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from("Git authentication required.\n"))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn valid_segment(value: &str) -> bool {
+    if value.is_empty() || value.len() > 100 || value == "." || value == ".." {
+        return false;
+    }
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !value.ends_with('.')
+}
+
+fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
+    (method == Method::GET
+        && path == "info/refs"
+        && query == "service=git-upload-pack")
+        || (method == Method::POST
+            && query.is_empty()
+            && matches!(path, "git-upload-pack" | "git-receive-pack"))
+}
+
+fn cgi_response(output: &[u8]) -> Result<Response, ()> {
+    let (header_end, separator_len) = output
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|index| (index, 4))
+        .or_else(|| {
+            output
+                .windows(2)
+                .position(|window| window == b"\n\n")
+                .map(|index| (index, 2))
+        })
+        .ok_or(())?;
+
+    let mut status = StatusCode::OK;
+    let mut response_headers = Vec::new();
+
+    for raw_line in output[..header_end].split(|byte| *byte == b'\n') {
+        let line = raw_line.strip_suffix(b"\r").unwrap_or(raw_line);
+        if line.is_empty() {
+            continue;
+        }
+        let line = std::str::from_utf8(line).map_err(|_| ())?;
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+
+        if name.eq_ignore_ascii_case("status") {
+            let code = value
+                .split_whitespace()
+                .next()
+                .and_then(|value| value.parse::<u16>().ok())
+                .ok_or(())?;
+            status = StatusCode::from_u16(code).map_err(|_| ())?;
+            continue;
+        }
+
+        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|_| ())?;
+        if matches!(
+            header_name.as_str(),
+            "connection"
+                | "keep-alive"
+                | "proxy-authenticate"
+                | "proxy-authorization"
+                | "te"
+                | "trailer"
+                | "transfer-encoding"
+                | "upgrade"
+        ) {
+            continue;
+        }
+        let header_value = HeaderValue::from_str(value).map_err(|_| ())?;
+        response_headers.push((header_name, header_value));
+    }
+
+    let body = output[header_end + separator_len..].to_vec();
+    let mut builder = Response::builder().status(status);
+    for (name, value) in response_headers {
+        builder = builder.header(name, value);
+    }
+    builder.body(Body::from(body)).map_err(|_| ())
+}
+
+pub(crate) async fn transport(
+    State(state): State<AppState>,
+    AxumPath((owner, repo_path, service_path)): AxumPath<(String, String, String)>,
+    request: Request,
+) -> Response {
+    let (parts, body) = request.into_parts();
+
+    if !authenticated(&parts.headers, &state) {
+        return unauthorized();
+    }
+
+    let Some(repo_name) = repo_path.strip_suffix(".git") else {
+        return plain_response(StatusCode::NOT_FOUND, "Repository not found.");
+    };
+    if !valid_segment(&owner)
+        || !valid_segment(repo_name)
+        || !valid_operation(&parts.method, &service_path, parts.uri.query().unwrap_or(""))
+    {
+        return plain_response(StatusCode::BAD_REQUEST, "Unsupported Git smart HTTP request.");
+    }
+
+    let storage_key = match sqlx::query_scalar::<_, String>(
+        "SELECT storage_key FROM repositories
+         WHERE owner = ? AND name = ? AND state = 'ready'",
+    )
+    .bind(&owner)
+    .bind(repo_name)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        Ok(Some(storage_key)) => storage_key,
+        Ok(None) => return plain_response(StatusCode::NOT_FOUND, "Repository not found."),
+        Err(error) => {
+            error!(%error, "failed to resolve Git HTTP repository");
+            return plain_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not resolve repository.",
+            );
+        }
+    };
+
+    let storage_path = state.storage_root.join(&storage_key);
+    if fs::metadata(&storage_path).await.is_err() {
+        warn!(%storage_key, "Git HTTP repository storage is missing");
+        return plain_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Repository storage is unavailable.",
+        );
+    }
+
+    const MAX_GIT_HTTP_BODY: usize = 64 * 1024 * 1024;
+    let request_body = match to_bytes(body, MAX_GIT_HTTP_BODY).await {
+        Ok(body) => body,
+        Err(_) => {
+            return plain_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "Git request exceeds the configured 64 MiB request limit.",
+            );
+        }
+    };
+
+    let query = parts.uri.query().unwrap_or("");
+    let path_info = format!("/{storage_key}/{service_path}");
+    let content_type = parts
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    let path_env = env::var("PATH").unwrap_or_default();
+
+    let mut command = Command::new(&state.git_bin);
+    command
+        .arg("http-backend")
+        .env_clear()
+        .env("PATH", path_env)
+        .env("GIT_PROJECT_ROOT", &state.storage_root)
+        .env("GIT_HTTP_EXPORT_ALL", "1")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", &state.empty_git_config)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("PATH_INFO", path_info)
+        .env("REQUEST_METHOD", parts.method.as_str())
+        .env("QUERY_STRING", query)
+        .env("CONTENT_TYPE", content_type)
+        .env("CONTENT_LENGTH", request_body.len().to_string())
+        .env("REMOTE_USER", "riotgit-instance-admin")
+        .env("SERVER_PROTOCOL", "HTTP/1.1")
+        .env("SERVER_NAME", "riotgit")
+        .env("SERVER_PORT", "8787")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    for (source, target) in [
+        ("git-protocol", "HTTP_GIT_PROTOCOL"),
+        ("host", "HTTP_HOST"),
+        ("user-agent", "HTTP_USER_AGENT"),
+        ("accept", "HTTP_ACCEPT"),
+    ] {
+        if let Some(value) = parts.headers.get(source).and_then(|value| value.to_str().ok()) {
+            command.env(target, value);
+        }
+    }
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            error!(%error, "failed to start native Git HTTP backend");
+            return plain_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Git transport is unavailable.",
+            );
+        }
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        if let Err(error) = stdin.write_all(&request_body).await {
+            error!(%error, "failed to pass Git request body to backend");
+            return plain_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Git transport request failed.",
+            );
+        }
+    }
+
+    let output = match timeout(Duration::from_secs(120), child.wait_with_output()).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) => {
+            error!(%error, "Git HTTP backend process failed");
+            return plain_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Git transport process failed.",
+            );
+        }
+        Err(_) => {
+            return plain_response(
+                StatusCode::GATEWAY_TIMEOUT,
+                "Git transport exceeded the 120 second execution limit.",
+            );
+        }
+    };
+
+    if !output.status.success() {
+        warn!(status = ?output.status, "Git HTTP backend returned a failure status");
+    }
+
+    match cgi_response(&output.stdout) {
+        Ok(response) => response,
+        Err(()) => {
+            error!("Git HTTP backend returned malformed CGI headers");
+            plain_response(
+                StatusCode::BAD_GATEWAY,
+                "Git backend returned an invalid response.",
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{valid_operation, valid_segment};
+    use axum::http::Method;
+
+    #[test]
+    fn accepts_git_http_operations() {
+        assert!(valid_operation(
+            &Method::GET,
+            "info/refs",
+            "service=git-upload-pack"
+        ));
+        assert!(valid_operation(&Method::POST, "git-upload-pack", ""));
+        assert!(valid_operation(&Method::POST, "git-receive-pack", ""));
+    }
+
+    #[test]
+    fn rejects_unsupported_git_http_operations() {
+        assert!(!valid_operation(
+            &Method::GET,
+            "info/refs",
+            "service=git-receive-pack"
+        ));
+        assert!(!valid_operation(&Method::POST, "git-receive-pack", "other=value"));
+        assert!(!valid_operation(&Method::DELETE, "git-upload-pack", ""));
+        assert!(!valid_segment("../outside"));
+    }
+}

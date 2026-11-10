@@ -11,7 +11,7 @@ The API currently supports:
 - repository creation that initializes a native bare Git directory;
 - authenticated repository list and lookup.
 
-It does **not** yet provide Git-over-SSH or Git smart HTTP clone/push/fetch transport, full user accounts/RBAC, collaboration, CI runners, or P2P. The web cockpit still contains sample preview records. Do not expose it as a completed service for team source hosting until the remaining P0/P1 security and transport issues are closed.
+It provides authenticated Git smart HTTP clone/fetch/push using one instance-level administrator token, but does **not** yet provide Git-over-SSH, per-user/read-only permissions, branch protection at receive-pack, full user accounts/RBAC, collaboration, CI runners, or P2P. The web cockpit still contains sample preview records. Do not expose it as a completed service for team source hosting until the remaining P0/P1 security and transport issues are closed.
 
 ## Requirements
 

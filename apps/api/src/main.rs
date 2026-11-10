@@ -19,6 +19,8 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+mod git_http;
+
 #[derive(Clone)]
 struct AppState {
     pool: SqlitePool,
@@ -550,6 +552,7 @@ async fn main() -> anyhow::Result<()> {
             get(list_repositories).post(create_repository),
         )
         .route("/api/v1/repositories/{owner}/{name}", get(get_repository))
+        .route("/git/{owner}/{repo}/{*path}", any(git_http::transport))
         .with_state(state);
 
     let address = parse_bind()?;

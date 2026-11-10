@@ -10,7 +10,7 @@ Last updated: 2026-11-11
 - [x] SQLite database initialization with versioned migration.
 - [x] Database-backed repository metadata.
 - [x] Native Git bare-repository initialization with generated opaque storage IDs and staging activation.
-- [x] Bearer-token guard for repository administration endpoints.
+- [x] Bearer-token guard for repository administration and Git smart HTTP (instance-wide admin credential).
 - [x] Repository create, list, and lookup API.
 - [x] Liveness and database/storage readiness endpoints.
 - [x] Next.js App Router cockpit design preview.
@@ -38,7 +38,7 @@ Pending CI verification after this update:
 
 - [ ] Per-user authentication, sessions, SSH key lifecycle, organization/team RBAC.
 - [ ] Git SSH forced-command transport.
-- [ ] Git smart HTTP transport.
+- [ ] Per-user/read-only Git permissions, branch protection checks at receive-pack, large-pack streaming, and transport integration tests.
 - [ ] Git LFS.
 - [ ] Live web API integration and real repository views.
 - [ ] Code tree/blob/commit/diff browser.

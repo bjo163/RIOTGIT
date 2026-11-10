@@ -37,8 +37,11 @@ The API listens on `127.0.0.1:8787` by default.
 - `GET /api/v1/repositories` — authenticated repository listing.
 - `GET /api/v1/repositories/{owner}/{name}` — authenticated repository lookup.
 - `POST /api/v1/repositories` — authenticated bare repository creation.
+- `GET /git/{owner}/{repo}.git/info/refs?service=git-upload-pack` — Git fetch discovery.
+- `POST /git/{owner}/{repo}.git/git-upload-pack` — Git clone/fetch.
+- `POST /git/{owner}/{repo}.git/git-receive-pack` — Git push.
 
-Repository administration currently uses one instance-level bearer token. It is a bootstrap guard, **not** the finished user/session/RBAC system. Do not share one token among untrusted users; user identity and scoped grants are tracked separately.
+Repository administration and Git smart HTTP currently use one instance-level token. Git HTTP accepts Bearer or Basic credentials (the token is the Basic password). This is a bootstrap guard, **not** the finished user/session/RBAC system. Every valid token currently has instance-admin access; do not share it among untrusted users.
 
 ## Create a repository
 
@@ -51,7 +54,7 @@ curl -X POST http://127.0.0.1:8787/api/v1/repositories \
 
 This reserves metadata, initializes a bare Git repository in a staging directory using the native Git executable, then atomically activates its storage path.
 
-Git clone/push/fetch transport is not implemented by this API bootstrap yet. It is a separate P0 issue and must not be inferred from repository creation support.
+Git smart HTTP is routed through native `git http-backend` after an authenticated repository lookup. Requests are capped at 64 MiB and Git execution at 120 seconds. SSH transport, per-user identities, read-only access, branch protection, and large-pack streaming are not implemented yet.
 
 ## Tests
 

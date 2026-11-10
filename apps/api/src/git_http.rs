@@ -77,6 +77,179 @@ fn valid_operation(method: &Method, path: &str, query: &str) -> bool {
             && matches!(path, "git-upload-pack" | "git-receive-pack"))
 }
 
+
+#[derive(Debug, Clone)]
+struct RefUpdate {
+    old_oid: String,
+    new_oid: String,
+    branch_name: String,
+}
+
+fn valid_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn is_zero_oid(value: &str) -> bool {
+    !value.is_empty() && value.bytes().all(|byte| byte == b'0')
+}
+
+fn parse_receive_pack_updates(body: &[u8]) -> Result<Vec<RefUpdate>, ()> {
+    let mut offset = 0usize;
+    let mut updates = Vec::new();
+
+    while offset + 4 <= body.len() {
+        let length_text = std::str::from_utf8(&body[offset..offset + 4]).map_err(|_| ())?;
+        if !length_text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(());
+        }
+        let packet_length = usize::from_str_radix(length_text, 16).map_err(|_| ())?;
+        offset += 4;
+
+        match packet_length {
+            0 | 2 => break,
+            1 => continue,
+            value if value < 4 => return Err(()),
+            value => {
+                let payload_length = value - 4;
+                let end = offset.checked_add(payload_length).ok_or(())?;
+                if end > body.len() {
+                    return Err(());
+                }
+
+                let packet = &body[offset..end];
+                offset = end;
+                let command = packet
+                    .split(|byte| *byte == 0)
+                    .next()
+                    .unwrap_or_default()
+                    .strip_suffix(b"\n")
+                    .unwrap_or_else(|| {
+                        packet
+                            .split(|byte| *byte == 0)
+                            .next()
+                            .unwrap_or_default()
+                    });
+                let Ok(line) = std::str::from_utf8(command) else {
+                    continue;
+                };
+                let mut fields = line.split_whitespace();
+                let (Some(old_oid), Some(new_oid), Some(reference)) =
+                    (fields.next(), fields.next(), fields.next())
+                else {
+                    continue;
+                };
+                if !valid_object_id(old_oid) || !valid_object_id(new_oid) {
+                    continue;
+                }
+                let Some(branch_name) = reference.strip_prefix("refs/heads/") else {
+                    continue;
+                };
+                if !crate::branch_protection::valid_branch_name(branch_name) {
+                    continue;
+                }
+
+                updates.push(RefUpdate {
+                    old_oid: old_oid.to_owned(),
+                    new_oid: new_oid.to_owned(),
+                    branch_name: branch_name.to_owned(),
+                });
+            }
+        }
+    }
+
+    Ok(updates)
+}
+
+async fn enforce_branch_protection(
+    state: &AppState,
+    repository_id: &str,
+    storage_path: &std::path::Path,
+    body: &[u8],
+) -> Result<(), StatusCode> {
+    let updates = parse_receive_pack_updates(body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    let rules = sqlx::query_as::<_, (String, bool, bool, bool)>(
+        "SELECT branch_name, require_pull_request, prevent_force_push, prevent_deletion
+         FROM branch_protection_rules WHERE repository_id = ?",
+    )
+    .bind(repository_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, repository_id, "failed to load branch protection rules");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    for update in updates {
+        let Some((_, require_pull_request, prevent_force_push, prevent_deletion)) =
+            rules.iter().find(|rule| rule.0 == update.branch_name)
+        else {
+            continue;
+        };
+
+        if *require_pull_request {
+            warn!(
+                repository_id,
+                branch = %update.branch_name,
+                "blocked direct push to branch requiring a pull request"
+            );
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        if *prevent_deletion && is_zero_oid(&update.new_oid) {
+            warn!(
+                repository_id,
+                branch = %update.branch_name,
+                "blocked deletion of protected branch"
+            );
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        if *prevent_force_push
+            && !is_zero_oid(&update.old_oid)
+            && !is_zero_oid(&update.new_oid)
+        {
+            let status = timeout(
+                Duration::from_secs(5),
+                Command::new(&state.git_bin)
+                    .arg("--git-dir")
+                    .arg(storage_path)
+                    .arg("merge-base")
+                    .arg("--is-ancestor")
+                    .arg(&update.old_oid)
+                    .arg(&update.new_oid)
+                    .env_clear()
+                    .env("PATH", env::var("PATH").unwrap_or_default())
+                    .env("GIT_CONFIG_NOSYSTEM", "1")
+                    .env("GIT_CONFIG_GLOBAL", &state.empty_git_config)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .kill_on_drop(true)
+                    .status(),
+            )
+            .await;
+
+            match status {
+                Ok(Ok(status)) if status.success() => {}
+                _ => {
+                    warn!(
+                        repository_id,
+                        branch = %update.branch_name,
+                        "blocked non-fast-forward update to protected branch"
+                    );
+                    return Err(StatusCode::FORBIDDEN);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn cgi_response(output: &[u8]) -> Result<Response> {
     let (header_end, separator_len) = output
         .windows(4)
@@ -220,6 +393,21 @@ pub(crate) async fn transport(
             );
         }
     };
+
+    if parts.method == Method::POST && service_path == "git-receive-pack" {
+        if let Err(status) =
+            enforce_branch_protection(&state, &repository_id, &storage_path, &request_body).await
+        {
+            let message = if status == StatusCode::FORBIDDEN {
+                "Branch protection rejected this direct Git update."
+            } else if status == StatusCode::BAD_REQUEST {
+                "Malformed Git receive-pack command list."
+            } else {
+                "Branch protection could not be evaluated."
+            };
+            return plain_response(status, message);
+        }
+    }
 
     let path_info = format!("/{storage_key}/{service_path}");
     let content_type = parts

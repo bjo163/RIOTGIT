@@ -116,9 +116,17 @@ async fn repository_context(
     .await
     {
         return Err(ApiError::new(
-            if write { StatusCode::FORBIDDEN } else { StatusCode::NOT_FOUND },
+            if write {
+                StatusCode::FORBIDDEN
+            } else {
+                StatusCode::NOT_FOUND
+            },
             if write { "forbidden" } else { "not_found" },
-            if write { "Repository write permission is required." } else { "Repository not found." },
+            if write {
+                "Repository write permission is required."
+            } else {
+                "Repository not found."
+            },
         ));
     }
 
@@ -127,10 +135,14 @@ async fn repository_context(
 
 fn validate_title_and_body(title: &str, body: Option<&str>) -> Result<(), ApiError> {
     if title.trim().is_empty() || title.trim().len() > 200 {
-        return Err(ApiError::bad_request("Pull request title must contain 1-200 bytes."));
+        return Err(ApiError::bad_request(
+            "Pull request title must contain 1-200 bytes.",
+        ));
     }
     if body.is_some_and(|value| value.len() > 100_000) {
-        return Err(ApiError::bad_request("Pull request description must be 100000 bytes or fewer."));
+        return Err(ApiError::bad_request(
+            "Pull request description must be 100000 bytes or fewer.",
+        ));
     }
     Ok(())
 }
@@ -180,7 +192,9 @@ async fn run_git(
     let mut output = Vec::with_capacity(output_limit.min(64 * 1024));
     match timeout(
         Duration::from_secs(30),
-        stdout.take(output_limit as u64 + 1).read_to_end(&mut output),
+        stdout
+            .take(output_limit as u64 + 1)
+            .read_to_end(&mut output),
     )
     .await
     {
@@ -210,11 +224,13 @@ async fn run_git(
 
     let status = timeout(Duration::from_secs(2), child.wait())
         .await
-        .map_err(|_| ApiError::new(
-            StatusCode::GATEWAY_TIMEOUT,
-            "git_timeout",
-            "Git process did not exit after producing output.",
-        ))?
+        .map_err(|_| {
+            ApiError::new(
+                StatusCode::GATEWAY_TIMEOUT,
+                "git_timeout",
+                "Git process did not exit after producing output.",
+            )
+        })?
         .map_err(|error| {
             error!(%error, "failed to wait for Git pull request process");
             ApiError::internal()
@@ -346,7 +362,13 @@ async fn load_pull_request(
         error!(%error, "failed to load pull request");
         ApiError::internal()
     })?
-    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "pull_request_not_found", "Pull request not found."))
+    .ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "pull_request_not_found",
+            "Pull request not found.",
+        )
+    })
 }
 
 pub(crate) async fn list_pull_requests(
@@ -361,7 +383,11 @@ pub(crate) async fn list_pull_requests(
         Some("open") => Some("open"),
         Some("closed") => Some("closed"),
         Some("merged") => Some("merged"),
-        Some(_) => return Err(ApiError::bad_request("Pull request state must be open, closed, or merged.")),
+        Some(_) => {
+            return Err(ApiError::bad_request(
+                "Pull request state must be open, closed, or merged.",
+            ));
+        }
     };
     let limit = query.limit.unwrap_or(30).clamp(1, 100);
     let offset = query.offset.unwrap_or(0).max(0);
@@ -406,29 +432,31 @@ pub(crate) async fn create_pull_request(
     validate_title_and_body(&input.title, input.body.as_deref())?;
 
     if input.head_ref == input.base_ref {
-        return Err(ApiError::bad_request("Head and base branches must be different."));
+        return Err(ApiError::bad_request(
+            "Head and base branches must be different.",
+        ));
     }
 
     let head_sha = resolve_branch(&state, &repository, &input.head_ref).await?;
     let base_sha = resolve_branch(&state, &repository, &input.base_ref).await?;
     if head_sha == base_sha {
-        return Err(ApiError::bad_request("The selected branches have no different commits."));
+        return Err(ApiError::bad_request(
+            "The selected branches have no different commits.",
+        ));
     }
 
     let (merge_base_status, _) = run_git(
         &state,
         &repository.storage_key,
-        &[
-            "merge-base".to_owned(),
-            base_sha.clone(),
-            head_sha.clone(),
-        ],
+        &["merge-base".to_owned(), base_sha.clone(), head_sha.clone()],
         1024,
         false,
     )
     .await?;
     if !merge_base_status.success() {
-        return Err(ApiError::bad_request("The selected branches do not share a merge base."));
+        return Err(ApiError::bad_request(
+            "The selected branches do not share a merge base.",
+        ));
     }
 
     let exists: bool = sqlx::query_scalar(
@@ -502,7 +530,9 @@ pub(crate) async fn get_pull_request(
 ) -> Result<Json<PullRequest>, ApiError> {
     let (_actor, repository) = repository_context(&state, &headers, &owner, &name, false).await?;
     let pull = load_pull_request(&state, &repository.id, number).await?;
-    Ok(Json(reconcile_pending_merge(&state, &repository, pull).await?))
+    Ok(Json(
+        reconcile_pending_merge(&state, &repository, pull).await?,
+    ))
 }
 
 pub(crate) async fn update_pull_request(
@@ -513,7 +543,9 @@ pub(crate) async fn update_pull_request(
 ) -> Result<Json<PullRequest>, ApiError> {
     let (actor, repository) = repository_context(&state, &headers, &owner, &name, false).await?;
     if !matches!(input.state.as_str(), "open" | "closed") {
-        return Err(ApiError::bad_request("Pull request state must be open or closed."));
+        return Err(ApiError::bad_request(
+            "Pull request state must be open or closed.",
+        ));
     }
     let current = load_pull_request(&state, &repository.id, number).await?;
     if current.state == "merged" {
@@ -615,11 +647,22 @@ pub(crate) async fn submit_review(
             "Use a named account to submit a pull request review.",
         ));
     }
-    if !matches!(input.state.as_str(), "comment" | "approved" | "changes_requested") {
-        return Err(ApiError::bad_request("Review state must be comment, approved, or changes_requested."));
+    if !matches!(
+        input.state.as_str(),
+        "comment" | "approved" | "changes_requested"
+    ) {
+        return Err(ApiError::bad_request(
+            "Review state must be comment, approved, or changes_requested.",
+        ));
     }
-    if input.body.as_ref().is_some_and(|value| value.len() > 20_000) {
-        return Err(ApiError::bad_request("Review body must be 20000 bytes or fewer."));
+    if input
+        .body
+        .as_ref()
+        .is_some_and(|value| value.len() > 20_000)
+    {
+        return Err(ApiError::bad_request(
+            "Review body must be 20000 bytes or fewer.",
+        ));
     }
 
     let pull = load_pull_request(&state, &repository.id, number).await?;
@@ -668,10 +711,7 @@ pub(crate) async fn submit_review(
     Ok((StatusCode::CREATED, Json(review)))
 }
 
-async fn has_required_approval(
-    state: &AppState,
-    pull: &PullRequest,
-) -> Result<bool, ApiError> {
+async fn has_required_approval(state: &AppState, pull: &PullRequest) -> Result<bool, ApiError> {
     let approvals: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM (
              SELECT reviewer_id, state,

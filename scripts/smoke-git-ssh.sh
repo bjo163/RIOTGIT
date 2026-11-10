@@ -62,6 +62,7 @@ git clone --quiet "$CLONE_URL" "$CLONE_DIR"
 git -C "$CLONE_DIR" config user.name "R!OTGIT SSH CI"
 git -C "$CLONE_DIR" config user.email "riotgit-ssh-ci@example.invalid"
 printf 'SSH transport round-trip passed\n' >"$CLONE_DIR/README.md"
+git -C "$CLONE_DIR" branch -M main
 git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
 git -C "$CLONE_DIR" push --quiet origin main

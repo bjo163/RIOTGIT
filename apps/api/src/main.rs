@@ -732,6 +732,10 @@ async fn main() -> anyhow::Result<()> {
             get(git_browser::commits),
         )
         .route(
+            "/api/v1/repositories/{owner}/{name}/diff",
+            get(git_browser::diff),
+        )
+        .route(
             "/api/v1/repositories/{owner}/{name}/access/{username}",
             put(grant_repository_access).delete(revoke_repository_access),
         )

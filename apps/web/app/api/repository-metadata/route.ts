@@ -36,6 +36,7 @@ async function forward(
     ...(payload ? { body: JSON.stringify(payload) } : {}),
     cache: "no-store",
   });
+  if (upstream.status === 204) return new NextResponse(null, { status: 204 });
   const result = await upstream.json().catch(() => null);
   return NextResponse.json(
     upstream.ok ? result : { error: apiErrorMessage(result, "Repository metadata action failed.") },
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
   }
   const base = repositoryPath(input.owner, input.name);
   if (input.resource === "labels") {
-    if (typeof input.name !== "string" || input.name.trim().length === 0 || input.name.length > 50) {
+    if (typeof input.label_name !== "string" || input.label_name.trim().length === 0 || input.label_name.length > 50) {
       return NextResponse.json({ error: "Label name must contain 1-50 characters." }, { status: 400 });
     }
     return forward(base + "/labels", token, "POST", {

@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tokio::{process::Command, time::timeout};
+use tokio::{io::AsyncReadExt, process::Command, time::timeout};
 use tracing::{error, warn};
 
 use crate::{ApiError, AppState};
@@ -174,41 +174,79 @@ async fn run_git(
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", &state.empty_git_config)
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .kill_on_drop(true);
 
-    let output = timeout(Duration::from_secs(15), command.output())
-        .await
-        .map_err(|_| {
-            ApiError::new(
+    let mut child = command.spawn().map_err(|error| {
+        error!(%error, "failed to execute native Git for code browser");
+        ApiError::internal()
+    })?;
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill().await;
+        return Err(ApiError::internal());
+    };
+
+    let mut bytes = Vec::with_capacity(output_limit.min(64 * 1024));
+    let read_result = timeout(
+        Duration::from_secs(15),
+        stdout.take(output_limit as u64 + 1).read_to_end(&mut bytes),
+    )
+    .await;
+
+    match read_result {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => {
+            error!(%error, "failed to read bounded native Git output");
+            let _ = child.kill().await;
+            return Err(ApiError::internal());
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(ApiError::new(
                 StatusCode::GATEWAY_TIMEOUT,
                 "git_timeout",
                 "Repository read exceeded the 15 second execution limit.",
-            )
-        })?
-        .map_err(|error| {
-            error!(%error, "failed to execute native Git for code browser");
-            ApiError::internal()
-        })?;
-
-    if !output.status.success() {
-        warn!(status = ?output.status, storage_key, "native Git read command returned an error");
-        return Err(ApiError::new(
-            StatusCode::NOT_FOUND,
-            "git_object_not_found",
-            "The requested revision or repository path was not found.",
-        ));
+            ));
+        }
     }
-    if output.stdout.len() > output_limit {
+
+    if bytes.len() > output_limit {
+        let _ = child.kill().await;
         return Err(ApiError::new(
             StatusCode::PAYLOAD_TOO_LARGE,
             "git_response_too_large",
             "The requested repository response exceeds the configured limit.",
         ));
     }
-    Ok(output.stdout)
+
+    let status = timeout(Duration::from_secs(1), child.wait())
+        .await
+        .map_err(|_| {
+            ApiError::new(
+                StatusCode::GATEWAY_TIMEOUT,
+                "git_timeout",
+                "Repository read exceeded the execution limit.",
+            )
+        })?
+        .map_err(|error| {
+            error!(%error, "failed to wait for native Git process");
+            ApiError::internal()
+        })?;
+
+    if !status.success() {
+        warn!(status = ?status, storage_key, "native Git read command returned an error");
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "git_object_not_found",
+            "The requested revision or repository path was not found.",
+        ));
+    }
+
+    Ok(bytes)
 }
 
 async fn resolve_commit(

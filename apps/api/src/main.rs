@@ -607,17 +607,18 @@ async fn revoke_repository_access(
         ));
     }
 
-    let target_user_id = sqlx::query_scalar::<_, String>(
-        "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|error| {
-        error!(%error, "failed to resolve access-revocation user");
-        ApiError::internal()
-    })?
-    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "user_not_found", "User not found."))?;
+    let target_user_id =
+        sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE username = ? COLLATE NOCASE")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|error| {
+                error!(%error, "failed to resolve access-revocation user");
+                ApiError::internal()
+            })?
+            .ok_or_else(|| {
+                ApiError::new(StatusCode::NOT_FOUND, "user_not_found", "User not found.")
+            })?;
 
     sqlx::query("DELETE FROM repository_access WHERE repository_id = ? AND user_id = ?")
         .bind(&repository_id)

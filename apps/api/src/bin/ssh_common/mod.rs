@@ -76,9 +76,9 @@ pub fn valid_segment(value: &str) -> bool {
         && value != ".."
         && !value.ends_with('.')
         && value.as_bytes()[0].is_ascii_alphanumeric()
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
 }
 
 pub fn key_fingerprint(key_type: &str, encoded_blob: &str) -> Result<String> {
@@ -112,8 +112,7 @@ pub fn key_fingerprint(key_type: &str, encoded_blob: &str) -> Result<String> {
 }
 
 pub fn fingerprint_from_auth_info(path: &Path) -> Result<String> {
-    let metadata =
-        std::fs::metadata(path).context("SSH authentication info is unavailable")?;
+    let metadata = std::fs::metadata(path).context("SSH authentication info is unavailable")?;
     if !metadata.is_file() || metadata.len() > 16 * 1024 {
         anyhow::bail!("SSH authentication info file is invalid");
     }
@@ -126,12 +125,8 @@ pub fn fingerprint_from_auth_info(path: &Path) -> Result<String> {
         if fields.next() != Some("publickey") {
             continue;
         }
-        let key_type = fields
-            .next()
-            .context("Missing SSH key type in auth info")?;
-        let encoded_blob = fields
-            .next()
-            .context("Missing SSH key blob in auth info")?;
+        let key_type = fields.next().context("Missing SSH key type in auth info")?;
+        let encoded_blob = fields.next().context("Missing SSH key blob in auth info")?;
         fingerprints.push(key_fingerprint(key_type, encoded_blob)?);
     }
 

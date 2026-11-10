@@ -100,8 +100,8 @@ fn main() {
 async fn run() -> Result<()> {
     let original_command =
         env::var("SSH_ORIGINAL_COMMAND").context("Interactive shell access is disabled")?;
-    let auth_file = env::var("SSH_USER_AUTH")
-        .context("OpenSSH authentication information is unavailable")?;
+    let auth_file =
+        env::var("SSH_USER_AUTH").context("OpenSSH authentication information is unavailable")?;
     let fingerprint = ssh_common::fingerprint_from_auth_info(Path::new(&auth_file))?;
     let (service, owner, name) = parse_original_command(&original_command)?;
 
@@ -132,10 +132,7 @@ async fn run() -> Result<()> {
         .env_clear()
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .env("HOME", "/var/lib/riotgit")
-        .env(
-            "RIOTGIT_DATABASE_PATH",
-            ssh_common::database_path()?,
-        )
+        .env("RIOTGIT_DATABASE_PATH", ssh_common::database_path()?)
         .env("RIOTGIT_STORAGE_ROOT", storage_root)
         .env("RIOTGIT_SSH_REPOSITORY_ID", &repository.id)
         .env("RIOTGIT_SSH_ACTOR_ID", &actor.id)
@@ -165,8 +162,14 @@ async fn run() -> Result<()> {
         "git.ssh.failure"
     };
 
-    if let Err(error) =
-        ssh_common::audit(&pool, &actor.id, action, &repository.id, service.operation()).await
+    if let Err(error) = ssh_common::audit(
+        &pool,
+        &actor.id,
+        action,
+        &repository.id,
+        service.operation(),
+    )
+    .await
     {
         eprintln!("R!OTGIT SSH audit write failed: {error}");
     }

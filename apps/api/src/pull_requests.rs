@@ -267,6 +267,66 @@ fn valid_object_id(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+async fn reconcile_pending_merge(
+    state: &AppState,
+    repository: &RepositoryContext,
+    pull: PullRequest,
+) -> Result<PullRequest, ApiError> {
+    if pull.state != "merging" {
+        return Ok(pull);
+    }
+
+    let Some(merge_commit) = pull.merge_commit.as_deref() else {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "merge_recovery_required",
+            "The pull request has an incomplete merge record and needs administrator recovery.",
+        ));
+    };
+
+    let current_base = resolve_branch(state, repository, &pull.base_ref).await?;
+    if current_base == merge_commit {
+        sqlx::query(
+            "UPDATE pull_requests
+             SET state = 'merged',
+                 merged_at = COALESCE(merged_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND state = 'merging' AND merge_commit = ?",
+        )
+        .bind(&pull.id)
+        .bind(merge_commit)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            error!(%error, pull_request_id = %pull.id, "failed to finalize recovered pull request merge");
+            ApiError::internal()
+        })?;
+    } else if current_base == pull.base_sha {
+        sqlx::query(
+            "UPDATE pull_requests
+             SET state = 'open', merged_by = NULL, merge_commit = NULL,
+                 merged_at = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND state = 'merging' AND merge_commit = ?",
+        )
+        .bind(&pull.id)
+        .bind(merge_commit)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            error!(%error, pull_request_id = %pull.id, "failed to reopen interrupted pull request merge");
+            ApiError::internal()
+        })?;
+    } else {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "merge_recovery_required",
+            "The base branch moved to an unexpected commit while this pull request was merging. Administrator recovery is required.",
+        ));
+    }
+
+    load_pull_request(state, &repository.id, pull.number).await
+}
+
 async fn load_pull_request(
     state: &AppState,
     repository_id: &str,
@@ -441,7 +501,8 @@ pub(crate) async fn get_pull_request(
     AxumPath((owner, name, number)): AxumPath<(String, String, i64)>,
 ) -> Result<Json<PullRequest>, ApiError> {
     let (_actor, repository) = repository_context(&state, &headers, &owner, &name, false).await?;
-    Ok(Json(load_pull_request(&state, &repository.id, number).await?))
+    let pull = load_pull_request(&state, &repository.id, number).await?;
+    Ok(Json(reconcile_pending_merge(&state, &repository, pull).await?))
 }
 
 pub(crate) async fn update_pull_request(
@@ -460,6 +521,13 @@ pub(crate) async fn update_pull_request(
             StatusCode::CONFLICT,
             "pull_request_merged",
             "A merged pull request cannot be reopened or closed.",
+        ));
+    }
+    if current.state == "merging" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "pull_request_merging",
+            "A pull request cannot be changed while its merge is being finalized.",
         ));
     }
     let can_write = crate::auth::can_access_repository(
@@ -555,6 +623,7 @@ pub(crate) async fn submit_review(
     }
 
     let pull = load_pull_request(&state, &repository.id, number).await?;
+    let pull = reconcile_pending_merge(&state, &repository, pull).await?;
     if pull.state != "open" {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -741,6 +810,31 @@ pub(crate) async fn merge_pull_request(
         return Err(ApiError::internal());
     }
 
+    let reserved = sqlx::query(
+        "UPDATE pull_requests
+         SET state = 'merging', merged_by = ?, merge_commit = ?,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE id = ? AND state = 'open' AND base_sha = ? AND head_sha = ?",
+    )
+    .bind(&actor.user_id)
+    .bind(&merge_commit)
+    .bind(&pull.id)
+    .bind(&pull.base_sha)
+    .bind(&pull.head_sha)
+    .execute(&state.pool)
+    .await
+    .map_err(|error| {
+        error!(%error, pull_request_id = %pull.id, "failed to reserve pull request merge");
+        ApiError::internal()
+    })?;
+    if reserved.rows_affected() != 1 {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "pull_request_changed",
+            "The pull request changed before merge could be reserved.",
+        ));
+    }
+
     let reference = format!("refs/heads/{}", pull.base_ref);
     let (update_status, _) = run_git(
         &state,
@@ -756,6 +850,20 @@ pub(crate) async fn merge_pull_request(
     )
     .await?;
     if !update_status.success() {
+        sqlx::query(
+            "UPDATE pull_requests
+             SET state = 'open', merged_by = NULL, merge_commit = NULL,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND state = 'merging' AND merge_commit = ?",
+        )
+        .bind(&pull.id)
+        .bind(&merge_commit)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            error!(%error, pull_request_id = %pull.id, "failed to roll back reserved pull request merge");
+            ApiError::internal()
+        })?;
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "base_branch_changed",
@@ -766,27 +874,22 @@ pub(crate) async fn merge_pull_request(
     let updated = sqlx::query_as::<_, PullRequest>(
         "UPDATE pull_requests
          SET state = 'merged',
-             merged_by = ?,
-             merge_commit = ?,
              merged_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         WHERE id = ? AND state = 'open' AND base_sha = ? AND head_sha = ?
+         WHERE id = ? AND state = 'merging' AND merge_commit = ?
          RETURNING id, number, title, body, state, head_ref, base_ref, head_sha, base_sha,
                    author_id, merged_by, merge_commit, created_at, updated_at, closed_at, merged_at",
     )
-    .bind(&actor.user_id)
-    .bind(&merge_commit)
     .bind(&pull.id)
-    .bind(&pull.base_sha)
-    .bind(&pull.head_sha)
+    .bind(&merge_commit)
     .fetch_optional(&state.pool)
     .await
     .map_err(|error| {
-        error!(%error, pull_request_id = %pull.id, merge_commit = %merge_commit, "branch merged but pull request metadata update failed");
+        error!(%error, pull_request_id = %pull.id, merge_commit = %merge_commit, "branch merged but pull request finalization failed");
         ApiError::internal()
     })?
     .ok_or_else(|| {
-        error!(pull_request_id = %pull.id, merge_commit = %merge_commit, "branch merged but pull request state was not updated");
+        error!(pull_request_id = %pull.id, merge_commit = %merge_commit, "branch merged but pull request finalization did not update a row");
         ApiError::internal()
     })?;
 

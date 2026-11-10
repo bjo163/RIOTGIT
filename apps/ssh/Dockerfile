@@ -16,11 +16,14 @@ RUN cargo build --release -p riotgit-api \
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git openssh-server \
+    && apt-get install -y --no-install-recommends ca-certificates git openssh-server openssl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 riotgit \
     && useradd --system --uid 10001 --gid 10001 --home-dir /var/lib/riotgit --create-home --shell /bin/bash riotgit \
     && useradd --system --uid 10001 --non-unique --gid 10001 --home-dir /var/lib/riotgit --no-create-home --shell /bin/bash git \
+    && RANDOM_GIT_PASSWORD="$(head -c 48 /dev/urandom | base64 | tr -d '\\n')" \
+    && usermod --password "$(openssl passwd -6 "$RANDOM_GIT_PASSWORD")" git \
+    && unset RANDOM_GIT_PASSWORD \
     && mkdir -p /etc/ssh/hostkeys /usr/local/lib/riotgit/hooks /run/sshd /var/empty \
     && chown -R riotgit:riotgit /var/lib/riotgit
 

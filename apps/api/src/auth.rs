@@ -2,9 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{
     Argon2,
-    password_hash::{
-        PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
-    },
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use axum::{
     Json,
@@ -169,7 +167,9 @@ pub(crate) async fn bootstrap_admin(pool: &SqlitePool) -> anyhow::Result<()> {
         }
         (Some(username), Some(password)) => {
             if !valid_username(&username) {
-                anyhow::bail!("RIOTGIT_ADMIN_USERNAME must be 3-39 ASCII letters, digits, dashes, or underscores");
+                anyhow::bail!(
+                    "RIOTGIT_ADMIN_USERNAME must be 3-39 ASCII letters, digits, dashes, or underscores"
+                );
             }
             if password.len() < 12 || password.len() > 1024 {
                 anyhow::bail!("RIOTGIT_ADMIN_PASSWORD must contain 12-1024 bytes");
@@ -246,10 +246,7 @@ pub(crate) async fn actor_from_token(token: &str, state: &AppState) -> Option<Ac
     })
 }
 
-pub(crate) async fn authenticate(
-    headers: &HeaderMap,
-    state: &AppState,
-) -> Result<Actor, ApiError> {
+pub(crate) async fn authenticate(headers: &HeaderMap, state: &AppState) -> Result<Actor, ApiError> {
     let token = headers
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -344,11 +341,7 @@ pub(crate) async fn login(
         return Err(ApiError::unauthorized());
     }
 
-    let token = format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple()
-    );
+    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let token_digest = hex::encode(Sha256::digest(token.as_bytes()));
     let expires_at = unix_now() + SESSION_TTL_SECONDS;
     let session_id = Uuid::new_v4().simple().to_string();

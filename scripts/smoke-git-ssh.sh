@@ -46,7 +46,7 @@ jq -e '.state == "ready"' <<<"$REPO_RESPONSE" >/dev/null
 
 READY=0
 for _ in $(seq 1 40); do
-  if ssh-keyscan -T 2 -p "$SSH_PORT" 127.0.0.1 2>/dev/null >>"$KNOWN_HOSTS"; then
+  if ssh-keyscan -T 2 -t ed25519 -p "$SSH_PORT" 127.0.0.1 2>/dev/null >>"$KNOWN_HOSTS"; then
     READY=1
     break
   fi

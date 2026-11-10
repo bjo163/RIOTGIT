@@ -110,6 +110,15 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0="http.extraHeader"
 export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
 git -C "$SOURCE_DIR" push --quiet --set-upstream origin main
+
+git -C "$SOURCE_DIR" checkout -b feature/pull-request-smoke >/dev/null
+printf 'R!OTGIT pull request merge smoke marker\n' >"$SOURCE_DIR/PULL_REQUEST.md"
+git -C "$SOURCE_DIR" add PULL_REQUEST.md
+git -C "$SOURCE_DIR" commit -m "test: create pull request smoke change" >/dev/null
+git -C "$SOURCE_DIR" push --quiet --set-upstream origin feature/pull-request-smoke
+git -C "$SOURCE_DIR" checkout main >/dev/null
+
+
 curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"branch_name":"main","require_pull_request":true,"prevent_force_push":true,"prevent_deletion":true}' >/dev/null
 printf "protected branch direct push must fail\n" >>"$SOURCE_DIR/README.md"
 git -C "$SOURCE_DIR" add README.md
@@ -120,6 +129,28 @@ if git -C "$SOURCE_DIR" push origin main >/dev/null 2>&1; then
 fi
 curl --fail --silent --show-error -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection?branch_name=main" -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
 git -C "$SOURCE_DIR" push --quiet origin main
+PR_NUMBER="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/pulls" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"title":"Pull request merge smoke","body":"Validate protected merge requires an approval.","head_ref":"feature/pull-request-smoke","base_ref":"main"}' | jq -er '.number')"
+curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection" -H "Authorization: Bearer $BUILDER_TOKEN" -H "Content-Type: application/json" -d '{"branch_name":"main","require_pull_request":true,"prevent_force_push":true,"prevent_deletion":true}' >/dev/null
+
+MERGE_BLOCK_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/pulls/$PR_NUMBER/merge" -H "Authorization: Bearer $BUILDER_TOKEN")"
+if [[ "$MERGE_BLOCK_STATUS" != "409" ]]; then
+  echo "ERROR: protected PR merge without approval returned $MERGE_BLOCK_STATUS instead of 409." >&2
+  exit 1
+fi
+
+curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/pulls/$PR_NUMBER/reviews" -H "Authorization: Bearer $READER_TOKEN" -H "Content-Type: application/json" -d '{"state":"approved","body":"Smoke reviewer approval."}' >/dev/null
+
+MERGED_STATE="$(curl --fail --silent --show-error -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/pulls/$PR_NUMBER/merge" -H "Authorization: Bearer $BUILDER_TOKEN" | jq -er '.state')"
+if [[ "$MERGED_STATE" != "merged" ]]; then
+  echo "ERROR: pull request did not reach merged state." >&2
+  exit 1
+fi
+
+curl --fail --silent --show-error -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/branch-protection?branch_name=main" -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+git -C "$SOURCE_DIR" fetch --quiet origin main
+git -C "$SOURCE_DIR" reset --hard origin/main >/dev/null
+git -C "$SOURCE_DIR" cat-file -e origin/main:PULL_REQUEST.md
+
 printf 'R!OTGIT diff smoke marker\n' >"$SOURCE_DIR/DIFF.txt"
 git -C "$SOURCE_DIR" add DIFF.txt
 git -C "$SOURCE_DIR" commit -m "test: add diff smoke marker" >/dev/null
@@ -160,4 +191,4 @@ if curl --fail --silent "$BASE_URL/api/v1/auth/me" -H "Authorization: Bearer $RE
   exit 1
 fi
 
-echo "R!OTGIT smoke passed: auth -> issue permissions/comments -> Git clone/push -> revoke -> logout."
+echo "R!OTGIT smoke passed: auth -> issues/labels/milestones -> branch protection -> PR approval/merge -> diff -> Git clone/push -> revoke -> logout."

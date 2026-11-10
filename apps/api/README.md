@@ -42,6 +42,12 @@ The API listens on `127.0.0.1:8787` by default.
 - `GET /api/v1/repositories` — authenticated, permission-filtered repository listing.
 - `POST /api/v1/repositories` — create a bare repository.
 - `GET /api/v1/repositories/{owner}/{name}` — authorized repository lookup.\n- `GET /api/v1/repositories/{owner}/{name}/issues` — list issues (optional `state=open|closed`).\n- `GET /api/v1/repositories/{owner}/{name}/diff?base=main&head=HEAD` — bounded, no-external-diff comparison of two refs.\n- `POST /api/v1/repositories/{owner}/{name}/issues` — create an issue (repository write permission).\n- `PUT /api/v1/repositories/{owner}/{name}/issues/{number}` — update title/body or open/close an issue (author or repository writer).\n- `GET /api/v1/repositories/{owner}/{name}/issues/{number}/comments` — list comments.\n- `POST /api/v1/repositories/{owner}/{name}/issues/{number}/comments` — add a comment to an open issue (repository read access).
+- `GET /api/v1/repositories/{owner}/{name}/labels` and `POST .../labels` — list and create repository labels.
+- `GET /api/v1/repositories/{owner}/{name}/issues/{number}/labels` — list labels attached to an issue.
+- `PUT /api/v1/repositories/{owner}/{name}/issues/{number}/labels/{label_id}` and `DELETE ...` — attach or remove an issue label.
+- `GET /api/v1/repositories/{owner}/{name}/milestones` and `POST .../milestones` — list and create milestones.
+- `PUT /api/v1/repositories/{owner}/{name}/issues/{number}/milestone` — assign an open milestone.
+- `DELETE /api/v1/repositories/{owner}/{name}/issues/{number}/milestone` — clear the milestone assignment.
 - `PUT /api/v1/repositories/{owner}/{name}/access/{username}` — grant `read`, `write`, or `admin`.
 - `DELETE /api/v1/repositories/{owner}/{name}/access/{username}` — revoke a grant.
 - `GET /git/{owner}/{repo}.git/info/refs?service=git-upload-pack` — fetch/clone discovery.

@@ -218,13 +218,13 @@ pub(crate) async fn delete_rule(
 
     sqlx::query("DELETE FROM branch_protection_rules WHERE repository_id = ? AND branch_name = ?")
         .bind(&repository.id)
-    .bind(&query.branch_name)
-    .execute(&state.pool)
-    .await
-    .map_err(|error| {
-        error!(%error, "failed to delete branch protection rule");
-        ApiError::internal()
-    })?;
+        .bind(&query.branch_name)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            error!(%error, "failed to delete branch protection rule");
+            ApiError::internal()
+        })?;
 
     crate::auth::record_audit(
         &state.pool,

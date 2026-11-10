@@ -23,6 +23,7 @@ mod branch_protection;
 mod collaboration;
 mod git_browser;
 mod git_http;
+mod pull_requests;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -733,6 +734,22 @@ async fn main() -> anyhow::Result<()> {
             get(branch_protection::list_rules)
                 .post(branch_protection::set_rule)
                 .delete(branch_protection::delete_rule),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/pulls",
+            get(pull_requests::list_pull_requests).post(pull_requests::create_pull_request),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/pulls/{number}",
+            get(pull_requests::get_pull_request).put(pull_requests::update_pull_request),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/pulls/{number}/reviews",
+            get(pull_requests::list_reviews).post(pull_requests::submit_review),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/pulls/{number}/merge",
+            post(pull_requests::merge_pull_request),
         )
         .route(
             "/api/v1/repositories/{owner}/{name}/issues/{number}/labels",

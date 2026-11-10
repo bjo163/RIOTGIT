@@ -424,7 +424,7 @@ async fn create_repository(
     .await;
 
     match init {
-        Ok(Ok(output)) if output.status.success() => {},
+        Ok(Ok(output)) if output.status.success() => {}
         Ok(Ok(output)) => {
             warn!(repo_id = %id, status = ?output.status, "native git init failed");
             let _ = fs::remove_dir_all(&staging_path).await;

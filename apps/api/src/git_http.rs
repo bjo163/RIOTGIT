@@ -306,7 +306,8 @@ pub(crate) async fn transport(
 
     match cgi_response(&output.stdout) {
         Ok(response) => response,
-        Err(()) => {
+        Err(error) => {
+            error!(%error,
             error!("Git HTTP backend returned malformed CGI headers");
             plain_response(
                 StatusCode::BAD_GATEWAY,

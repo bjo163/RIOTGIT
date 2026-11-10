@@ -103,6 +103,102 @@ curl --fail --silent --show-error \
   -d '{"permission":"read"}' \
   >/dev/null
 
+ISSUE_NUMBER="$(curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Issue workflow smoke","body":"Verify issue creation, visibility, comments, and close state."}' | jq -er '.number')"
+
+curl --fail --silent --show-error \
+  "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" \
+  -H "Authorization: Bearer $READER_TOKEN" | jq -e --argjson number "$ISSUE_NUMBER" 'any(.[]; .number == $number)' >/dev/null
+
+if curl --silent --output /dev/null --write-out '%{http_code}' \
+  -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues" \
+  -H "Authorization: Bearer $READER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Reader issue","body":"This must be denied."}' | grep -q '^201"$TMP_DIR/source"
+CLONE_DIR="$TMP_DIR/reader-clone"
+REVOKED_CLONE_DIR="$TMP_DIR/revoked-clone"
+mkdir -p "$SOURCE_DIR"
+git -C "$SOURCE_DIR" init --initial-branch=main >/dev/null
+git -C "$SOURCE_DIR" config user.name "R!OTGIT CI"
+git -C "$SOURCE_DIR" config user.email "riotgit-ci@example.invalid"
+printf 'R!OTGIT Git smart HTTP permission smoke test\n' >"$SOURCE_DIR/README.md"
+git -C "$SOURCE_DIR" add README.md
+git -C "$SOURCE_DIR" commit -m "test: initial permission smoke commit" >/dev/null
+git -C "$SOURCE_DIR" remote add origin "$BASE_URL/git/builder/transport-smoke.git"
+
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0="http.extraHeader"
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
+
+git -C "$SOURCE_DIR" push --quiet --set-upstream origin main
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $READER_TOKEN"
+curl --fail --silent --show-error "$BASE_URL/api/v1/repositories/builder/transport-smoke" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null
+git clone --quiet "$BASE_URL/git/builder/transport-smoke.git" "$CLONE_DIR"
+cmp "$SOURCE_DIR/README.md" "$CLONE_DIR/README.md"
+
+printf 'reader write must be rejected\n' >>"$CLONE_DIR/README.md"
+git -C "$CLONE_DIR" config user.name "R!OTGIT Reader"
+git -C "$CLONE_DIR" config user.email "reader@example.invalid"
+git -C "$CLONE_DIR" add README.md
+git -C "$CLONE_DIR" commit -m "test: reader write must fail" >/dev/null
+if git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
+  echo "ERROR: read-only user was allowed to push." >&2
+  exit 1
+fi
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $BUILDER_TOKEN"
+curl --fail --silent --show-error \
+  -X DELETE "$BASE_URL/api/v1/repositories/builder/transport-smoke/access/reader" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" >/dev/null
+
+export GIT_CONFIG_VALUE_0="Authorization: Bearer $READER_TOKEN"
+if git clone --quiet "$BASE_URL/git/builder/transport-smoke.git" "$REVOKED_CLONE_DIR" >/dev/null 2>&1; then
+  echo "ERROR: revoked read permission still allowed cloning." >&2
+  exit 1
+fi
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/auth/logout" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null
+if curl --fail --silent "$BASE_URL/api/v1/auth/me" \
+  -H "Authorization: Bearer $READER_TOKEN" >/dev/null; then
+  echo "ERROR: logged-out session was still accepted." >&2
+  exit 1
+fi
+
+echo "R!OTGIT auth + collaboration + Git HTTP smoke passed: bootstrap -> login -> issue permissions/comments -> clone -> deny push -> revoke -> deny clone -> logout."
+; then
+  echo "ERROR: read-only user was allowed to create an issue." >&2
+  exit 1
+fi
+
+curl --fail --silent --show-error \
+  -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/comments" \
+  -H "Authorization: Bearer $READER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"body":"Reader can comment on a repository they can read."}' >/dev/null
+
+curl --fail --silent --show-error \
+  -X PUT "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER" \
+  -H "Authorization: Bearer $BUILDER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"state":"closed"}' | jq -e '.state == "closed"' >/dev/null
+
+COMMENT_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  -X POST "$BASE_URL/api/v1/repositories/builder/transport-smoke/issues/$ISSUE_NUMBER/comments" \
+  -H "Authorization: Bearer $READER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"body":"Closed issue comment must be rejected."}')"
+if [[ "$COMMENT_STATUS" != "409" ]]; then
+  echo "ERROR: comments on a closed issue returned $COMMENT_STATUS instead of 409." >&2
+  exit 1
+fi
+
 SOURCE_DIR="$TMP_DIR/source"
 CLONE_DIR="$TMP_DIR/reader-clone"
 REVOKED_CLONE_DIR="$TMP_DIR/revoked-clone"

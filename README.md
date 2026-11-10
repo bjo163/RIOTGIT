@@ -65,7 +65,7 @@ Scripts snapshot the complete single-node data volume and create a pre-restore s
 ## Product pillars
 
 - **Sovereign:** self-host your code and control your data.
-- **Compatible:** use standard Git clients over HTTP today; SSH transport is planned.
+- **Compatible:** use standard Git clients over authenticated Smart HTTP and an optional restricted OpenSSH gateway.
 - **Local-first:** bare repositories remain portable outside the web app.
 - **Lean:** modular monolith first, optional workers later.
 - **Extensible:** mirrors, federation, P2P, runners, and AI are adapter-based future capabilities.
@@ -81,6 +81,7 @@ Scripts snapshot the complete single-node data volume and create a pre-restore s
 | Metadata | SQLx + versioned migrations |
 | Git storage | Native bare repositories on filesystem |
 | Git Smart HTTP | Native `git http-backend` behind authenticated API route |
+| Git SSH | Optional OpenSSH gateway with DB-backed authorized keys and forced-command transport |
 | Identity | Argon2 password hashes, revocable bearer sessions, SSH key registry |
 | Browser session | HttpOnly, SameSite=Lax cookie managed by Next.js server routes |
 | Deployment | Docker Compose single-node profile, volume backup/restore scripts |
@@ -138,6 +139,22 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up --build -
 
 The web and API host ports bind to loopback by default. Place a trusted TLS reverse proxy in front for remote access. See [Deployment](docs/DEPLOYMENT.md).
 
+## Git over SSH (optional)
+
+Enable the restricted gateway with the Compose SSH profile:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up --build -d api ssh
+```
+
+It listens on port 2222 by default (loopback-bound). Configure firewall/port exposure deliberately for remote access. Register a key with `riotgit ssh-key add ~/.ssh/id_ed25519.pub`, then clone with:
+
+```bash
+git clone ssh://git@your-host.example:2222/your-user/your-repo.git
+```
+
+The SSH account is always `git`; the registered key identifies the application user. Interactive shell and forwarding are disabled. See [SSH gateway guide](apps/ssh/README.md). This gateway is experimental until the SSH CI integration and deployment-specific host-key/security checks pass.
+
 ## Git Smart HTTP
 
 The current Git transport is HTTP, not SSH. Example with a session token:
@@ -165,7 +182,7 @@ To push, the session must have repository `write` or `admin` permission. A `read
 
 ## Not implemented yet
 
-OpenSSH forced-command clone/push, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and automated restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
+Additional SSH interoperability testing and hardening, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and automated restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
 
 ## Engineering rules
 

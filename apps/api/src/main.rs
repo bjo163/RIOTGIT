@@ -19,6 +19,7 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 pub(crate) mod auth;
+mod collaboration;
 mod git_browser;
 mod git_http;
 
@@ -706,6 +707,18 @@ async fn main() -> anyhow::Result<()> {
             get(list_repositories).post(create_repository),
         )
         .route("/api/v1/repositories/{owner}/{name}", get(get_repository))
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues",
+            get(collaboration::list_issues).post(collaboration::create_issue),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues/{number}",
+            put(collaboration::update_issue),
+        )
+        .route(
+            "/api/v1/repositories/{owner}/{name}/issues/{number}/comments",
+            get(collaboration::list_comments).post(collaboration::create_comment),
+        )
         .route(
             "/api/v1/repositories/{owner}/{name}/tree",
             get(git_browser::tree),

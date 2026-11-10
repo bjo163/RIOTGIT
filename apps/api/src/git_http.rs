@@ -512,7 +512,7 @@ pub(crate) async fn transport(
 
 #[cfg(test)]
 mod tests {
-    use super::{valid_operation, valid_segment};
+    use super::{parse_receive_pack_updates, valid_operation, valid_segment};
     use axum::http::Method;
 
     #[test]
@@ -540,5 +540,27 @@ mod tests {
         ));
         assert!(!valid_operation(&Method::DELETE, "git-upload-pack", ""));
         assert!(!valid_segment("../outside"));
+    }
+
+    #[test]
+    fn parses_receive_pack_branch_updates() {
+        let old_oid = "1111111111111111111111111111111111111111";
+        let new_oid = "2222222222222222222222222222222222222222";
+        let command = format!("{old_oid} {new_oid} refs/heads/main\\0report-status\n");
+        let packet_length = command.len() + 4;
+        let mut body = format!("{packet_length:04x}").into_bytes();
+        body.extend_from_slice(command.as_bytes());
+        body.extend_from_slice(b"0000");
+
+        let updates = parse_receive_pack_updates(&body).expect("valid pkt-line");
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].branch_name, "main");
+        assert_eq!(updates[0].old_oid, old_oid);
+        assert_eq!(updates[0].new_oid, new_oid);
+    }
+
+    #[test]
+    fn rejects_malformed_receive_pack_pkt_lines() {
+        assert!(parse_receive_pack_updates(b"not-a-pkt-line").is_err());
     }
 }

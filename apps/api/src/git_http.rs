@@ -21,13 +21,12 @@ async fn authenticated(headers: &HeaderMap, state: &AppState) -> Option<crate::a
     let auth = headers.get(AUTHORIZATION)?.to_str().ok()?;
     let token = if let Some(token) = auth.strip_prefix("Bearer ") {
         token.to_owned()
-    } else if let Some(encoded) = auth.strip_prefix("Basic ") {
+    } else {
+        let encoded = auth.strip_prefix("Basic ")?;
         let decoded = STANDARD.decode(encoded).ok()?;
         let credentials = std::str::from_utf8(&decoded).ok()?;
         let (_, password) = credentials.split_once(':')?;
         password.to_owned()
-    } else {
-        return None;
     };
 
     crate::auth::actor_from_token(&token, state).await

@@ -70,10 +70,6 @@ impl ApiError {
         )
     }
 
-    pub(crate) fn unavailable(message: &'static str) -> Self {
-        Self::new(StatusCode::SERVICE_UNAVAILABLE, "not_configured", message)
-    }
-
     pub(crate) fn internal() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,

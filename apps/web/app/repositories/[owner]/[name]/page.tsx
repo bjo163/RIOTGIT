@@ -39,6 +39,12 @@ type CommitsResult = {
   commits: CommitEntry[];
 };
 
+type DiffResult = {
+  base: string;
+  head: string;
+  diff: string;
+};
+
 type IssueEntry = {
   id: string;
   number: number;
@@ -63,7 +69,10 @@ export default function RepositoryPage() {
   const [issues, setIssues] = useState<IssueEntry[]>([]);
   const [issueTitle, setIssueTitle] = useState("");
   const [issueBody, setIssueBody] = useState("");
-  const [view, setView] = useState<"code" | "history" | "issues">("code");
+  const [diffBase, setDiffBase] = useState("main");
+  const [diffHead, setDiffHead] = useState("HEAD");
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
+  const [view, setView] = useState<"code" | "history" | "issues" | "diff">("code");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -155,6 +164,35 @@ export default function RepositoryPage() {
       setLoading(false);
     }
   }, [owner, name, reference]);
+
+  const loadDiff = useCallback(async () => {
+    setView("diff");
+    setLoading(true);
+    setError("");
+    try {
+      const query = new URLSearchParams({
+        resource: "diff",
+        owner,
+        name,
+        base: diffBase,
+        head: diffHead,
+      });
+      const response = await fetch("/api/repository-data?" + query.toString(), {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as DiffResult & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Could not load repository diff.");
+        setDiffResult(null);
+        return;
+      }
+      setDiffResult(payload);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setLoading(false);
+    }
+  }, [owner, name, diffBase, diffHead]);
 
   const loadIssues = useCallback(async () => {
     setView("issues");
@@ -269,6 +307,11 @@ export default function RepositoryPage() {
           className={view === "issues" ? "repo-tab active" : "repo-tab"}
           onClick={() => void loadIssues()}
         >◎ ISSUES <small>{issues.filter((issue) => issue.state === "open").length}</small></button>
+        <button
+          type="button"
+          className={view === "diff" ? "repo-tab active" : "repo-tab"}
+          onClick={() => void loadDiff()}
+        >± DIFF</button>
         <span className="repo-ref-label">
           REF
           <input
@@ -357,7 +400,7 @@ export default function RepositoryPage() {
             <div className="repo-browser-empty">NO COMMITS FOUND FOR THIS REF.</div>
           )}
         </section>
-      ) : (
+      ) : view === "issues" ? (
         <section className="repo-browser-panel issues-workspace">
           <form className="issue-create" onSubmit={submitIssue}>
             <div className="issue-create-heading">
@@ -413,6 +456,28 @@ export default function RepositoryPage() {
             </div>
           ) : (
             <div className="repo-browser-empty">NO ISSUES YET. FIND THE FIRST THING TO FIX.</div>
+          )}
+        </section>
+      ) : (
+        <section className="repo-browser-panel diff-workspace">
+          <div className="diff-controls">
+            <label>
+              BASE
+              <input value={diffBase} onChange={(event) => setDiffBase(event.target.value)} maxLength={256} />
+            </label>
+            <span>→</span>
+            <label>
+              COMPARE
+              <input value={diffHead} onChange={(event) => setDiffHead(event.target.value)} maxLength={256} />
+            </label>
+            <button type="button" className="mini-action" onClick={() => void loadDiff()}>RUN DIFF ↗</button>
+          </div>
+          {loading ? (
+            <div className="repo-browser-empty">COMPARING GIT OBJECTS...</div>
+          ) : diffResult?.diff ? (
+            <pre className="diff-code"><code>{diffResult.diff}</code></pre>
+          ) : (
+            <div className="repo-browser-empty">NO DIFFERENCES FOUND — OR THE REFS ARE NOT AVAILABLE.</div>
           )}
         </section>
       )}

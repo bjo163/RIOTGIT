@@ -505,7 +505,6 @@ pub(crate) async fn commits(
     }))
 }
 
-
 pub(crate) async fn diff(
     State(state): State<AppState>,
     headers: HeaderMap,

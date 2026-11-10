@@ -5,7 +5,7 @@ use axum::{
     extract::{Path as AxumPath, Query, State},
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     response::{IntoResponse, Response},
-    routing::{any, get},
+    routing::{any, get, post, put},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,6 +19,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+mod auth;
 mod git_http;
 
 #[derive(Clone)]
@@ -43,14 +44,14 @@ struct ErrorBody {
 }
 
 #[derive(Debug)]
-struct ApiError {
+pub(crate) struct ApiError {
     status: StatusCode,
     code: &'static str,
     message: &'static str,
 }
 
 impl ApiError {
-    fn new(status: StatusCode, code: &'static str, message: &'static str) -> Self {
+    pub(crate) fn new(status: StatusCode, code: &'static str, message: &'static str) -> Self {
         Self {
             status,
             code,
@@ -58,11 +59,11 @@ impl ApiError {
         }
     }
 
-    fn bad_request(message: &'static str) -> Self {
+    pub(crate) fn bad_request(message: &'static str) -> Self {
         Self::new(StatusCode::BAD_REQUEST, "bad_request", message)
     }
 
-    fn unauthorized() -> Self {
+    pub(crate) fn unauthorized() -> Self {
         Self::new(
             StatusCode::UNAUTHORIZED,
             "unauthorized",
@@ -70,11 +71,11 @@ impl ApiError {
         )
     }
 
-    fn unavailable(message: &'static str) -> Self {
+    pub(crate) fn unavailable(message: &'static str) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, "not_configured", message)
     }
 
-    fn internal() -> Self {
+    pub(crate) fn internal() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal_error",
@@ -159,28 +160,6 @@ fn valid_segment(value: &str) -> bool {
     first.is_ascii_alphanumeric()
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
         && !value.ends_with('.')
-}
-
-fn authorize(headers: &HeaderMap, state: &AppState) -> Result<(), ApiError> {
-    let Some(expected) = state.api_token_digest else {
-        return Err(ApiError::unavailable(
-            "Set RIOTGIT_API_TOKEN before using repository administration endpoints.",
-        ));
-    };
-
-    let supplied = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .filter(|value| !value.is_empty())
-        .ok_or_else(ApiError::unauthorized)?;
-
-    let actual: [u8; 32] = Sha256::digest(supplied.as_bytes()).into();
-    if bool::from(expected.ct_eq(&actual)) {
-        Ok(())
-    } else {
-        Err(ApiError::unauthorized())
-    }
 }
 
 fn parse_bind() -> anyhow::Result<SocketAddr> {
@@ -276,32 +255,38 @@ async fn list_repositories(
     headers: HeaderMap,
     Query(pagination): Query<Pagination>,
 ) -> Result<Json<Vec<Repository>>, ApiError> {
-    authorize(&headers, &state)?;
+    let actor = auth::authenticate(&headers, &state).await?;
     let limit = pagination.limit.unwrap_or(30).clamp(1, 100);
     let offset = pagination.offset.unwrap_or(0).max(0);
+    let owner_filter = pagination.owner;
 
-    let records = if let Some(owner) = pagination.owner {
-        sqlx::query_as::<_, Repository>(
-            "SELECT id, owner, name, description, visibility, state, storage_key, created_at, updated_at
-             FROM repositories WHERE owner = ? AND state != 'failed'
-             ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        )
-        .bind(owner)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&state.pool)
-        .await
-    } else {
-        sqlx::query_as::<_, Repository>(
-            "SELECT id, owner, name, description, visibility, state, storage_key, created_at, updated_at
-             FROM repositories WHERE state != 'failed'
-             ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&state.pool)
-        .await
-    }
+    let records = sqlx::query_as::<_, Repository>(
+        "SELECT r.id, r.owner, r.name, r.description, r.visibility, r.state,
+                r.storage_key, r.created_at, r.updated_at
+         FROM repositories r
+         WHERE r.state != 'failed'
+           AND (
+                ? = 1
+                OR r.visibility IN ('public', 'internal')
+                OR r.owner = ?
+                OR EXISTS (
+                    SELECT 1 FROM repository_access a
+                    WHERE a.repository_id = r.id AND a.user_id = ?
+                )
+           )
+           AND (? IS NULL OR r.owner = ?)
+         ORDER BY r.created_at DESC
+         LIMIT ? OFFSET ?",
+    )
+    .bind(if actor.is_admin() { 1_i64 } else { 0_i64 })
+    .bind(&actor.username)
+    .bind(&actor.user_id)
+    .bind(owner_filter.as_deref())
+    .bind(owner_filter.as_deref())
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.pool)
+    .await
     .map_err(|error| {
         error!(%error, "failed to list repositories");
         ApiError::internal()
@@ -315,13 +300,13 @@ async fn get_repository(
     headers: HeaderMap,
     AxumPath((owner, name)): AxumPath<(String, String)>,
 ) -> Result<Json<Repository>, ApiError> {
-    authorize(&headers, &state)?;
+    let actor = auth::authenticate(&headers, &state).await?;
     let record = sqlx::query_as::<_, Repository>(
         "SELECT id, owner, name, description, visibility, state, storage_key, created_at, updated_at
          FROM repositories WHERE owner = ? AND name = ? AND state != 'failed'",
     )
-    .bind(owner)
-    .bind(name)
+    .bind(&owner)
+    .bind(&name)
     .fetch_optional(&state.pool)
     .await
     .map_err(|error| {
@@ -329,6 +314,23 @@ async fn get_repository(
         ApiError::internal()
     })?
     .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "Repository not found."))?;
+
+    if !auth::can_access_repository(
+        &state,
+        &actor,
+        &record.id,
+        &record.owner,
+        &record.visibility,
+        false,
+    )
+    .await
+    {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "Repository not found.",
+        ));
+    }
 
     if fs::metadata(state.storage_root.join(&record.storage_key))
         .await
@@ -350,7 +352,14 @@ async fn create_repository(
     headers: HeaderMap,
     Json(input): Json<CreateRepositoryRequest>,
 ) -> Result<(StatusCode, Json<Repository>), ApiError> {
-    authorize(&headers, &state)?;
+    let actor = auth::authenticate(&headers, &state).await?;
+    if !actor.is_admin() && !actor.username.eq_ignore_ascii_case(&input.owner) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Members may create repositories only under their own username.",
+        ));
+    }
 
     if !valid_segment(&input.owner) || !valid_segment(&input.name) {
         return Err(ApiError::bad_request(
@@ -524,6 +533,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (storage_root, template_dir, empty_git_config) = prepare_storage().await?;
     let pool = open_database().await?;
+    auth::bootstrap_admin(&pool).await?;
     let api_token_digest = env::var("RIOTGIT_API_TOKEN")
         .ok()
         .filter(|token| !token.trim().is_empty())
@@ -547,6 +557,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
         .route("/api/v1/meta", get(meta))
+        .route("/api/v1/auth/login", post(auth::login))
+        .route("/api/v1/auth/me", get(auth::me))
+        .route("/api/v1/auth/logout", post(auth::logout))
+        .route("/api/v1/admin/users", post(auth::create_user))
         .route(
             "/api/v1/repositories",
             get(list_repositories).post(create_repository),

@@ -77,20 +77,23 @@ export async function POST(request: Request) {
   if (isComment && (!Number.isSafeInteger(number) || (number ?? 0) < 1)) {
     return NextResponse.json({ error: "Issue number must be a positive integer." }, { status: 400 });
   }
-  if (typeof input.body !== "string" || input.body.trim().length === 0) {
-    return NextResponse.json({ error: "A non-empty body is required." }, { status: 400 });
+  if (
+    (isComment && (typeof input.body !== "string" || input.body.trim().length === 0)) ||
+    (input.body !== undefined && typeof input.body !== "string")
+  ) {
+    return NextResponse.json({ error: "A comment requires text; issue details must be text when provided." }, { status: 400 });
   }
 
   let endpoint = apiPath(input.owner, input.name);
   let payload: Record<string, string>;
   if (isComment) {
     endpoint += "/" + number + "/comments";
-    payload = { body: input.body };
+    payload = { body: input.body as string };
   } else {
     if (typeof input.title !== "string" || input.title.trim().length === 0 || input.title.length > 200) {
       return NextResponse.json({ error: "Issue title must contain 1-200 characters." }, { status: 400 });
     }
-    payload = { title: input.title, body: input.body };
+    payload = { title: input.title, body: typeof input.body === "string" ? input.body : "" };
   }
 
   try {

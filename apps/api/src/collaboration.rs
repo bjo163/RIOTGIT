@@ -218,16 +218,15 @@ pub(crate) async fn create_issue(
 
     let issue = sqlx::query_as::<_, Issue>(
         "INSERT INTO issues (id, repository_id, number, title, body, state, author_id)
-         SELECT ?, ?, COALESCE(MAX(number), 0) + 1, ?, ?, 'open', ?
-         FROM issues WHERE repository_id = ?
+         VALUES (?, ?, (SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE repository_id = ?), ?, ?, 'open', ?)
          RETURNING id, number, title, body, state, author_id, created_at, updated_at, closed_at",
     )
     .bind(Uuid::new_v4().simple().to_string())
     .bind(&repository.id)
+    .bind(&repository.id)
     .bind(title)
     .bind(input.body.filter(|body| !body.is_empty()))
     .bind(&actor.user_id)
-    .bind(&repository.id)
     .fetch_one(&state.pool)
     .await
     .map_err(|error| {

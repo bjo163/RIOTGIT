@@ -45,6 +45,33 @@ type DiffResult = {
   diff: string;
 };
 
+type PullRequestEntry = {
+  id: string;
+  number: number;
+  title: string;
+  body: string | null;
+  state: "open" | "closed" | "merging" | "merged";
+  head_ref: string;
+  base_ref: string;
+  head_sha: string;
+  base_sha: string;
+  author_id: string;
+  merged_by: string | null;
+  merge_commit: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  merged_at: string | null;
+};
+
+type PullRequestReviewEntry = {
+  id: string;
+  reviewer_id: string;
+  state: "comment" | "approved" | "changes_requested";
+  body: string | null;
+  submitted_at: string;
+};
+
 type IssueEntry = {
   id: string;
   number: number;
@@ -91,6 +118,16 @@ export default function RepositoryPage() {
   const [tree, setTree] = useState<TreeResult | null>(null);
   const [blob, setBlob] = useState<BlobResult | null>(null);
   const [commits, setCommits] = useState<CommitEntry[]>([]);
+  const [pullRequests, setPullRequests] = useState<PullRequestEntry[]>([]);
+  const [selectedPullRequest, setSelectedPullRequest] = useState<PullRequestEntry | null>(null);
+  const [pullRequestReviews, setPullRequestReviews] = useState<PullRequestReviewEntry[]>([]);
+  const [pullRequestTitle, setPullRequestTitle] = useState("");
+  const [pullRequestBody, setPullRequestBody] = useState("");
+  const [pullRequestHead, setPullRequestHead] = useState("");
+  const [pullRequestBase, setPullRequestBase] = useState("main");
+  const [reviewState, setReviewState] = useState<"approved" | "changes_requested" | "comment">("approved");
+  const [reviewBody, setReviewBody] = useState("");
+  const [pullRequestBusy, setPullRequestBusy] = useState(false);
   const [issues, setIssues] = useState<IssueEntry[]>([]);
   const [labels, setLabels] = useState<LabelEntry[]>([]);
   const [milestones, setMilestones] = useState<MilestoneEntry[]>([]);
@@ -109,7 +146,7 @@ export default function RepositoryPage() {
   const [diffBase, setDiffBase] = useState("main");
   const [diffHead, setDiffHead] = useState("HEAD");
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
-  const [view, setView] = useState<"code" | "history" | "issues" | "diff">("code");
+  const [view, setView] = useState<"code" | "history" | "issues" | "diff" | "pulls">("code");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -230,6 +267,201 @@ export default function RepositoryPage() {
       setLoading(false);
     }
   }, [owner, name, diffBase, diffHead]);
+
+  const loadPullRequests = useCallback(async () => {
+    setView("pulls");
+    setLoading(true);
+    setError("");
+    setSelectedPullRequest(null);
+    setPullRequestReviews([]);
+    try {
+      const query = new URLSearchParams({ owner, name });
+      const response = await fetch("/api/repository-pulls?" + query.toString(), { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as PullRequestEntry[] | { error?: string };
+      if (!response.ok || !Array.isArray(payload)) {
+        setError(!Array.isArray(payload) ? (payload.error ?? "Pull requests could not be loaded.") : "Pull requests could not be loaded.");
+        return;
+      }
+      setPullRequests(payload);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setLoading(false);
+    }
+  }, [owner, name]);
+
+  async function openPullRequest(number: number) {
+    setPullRequestBusy(true);
+    setError("");
+    try {
+      const baseQuery = new URLSearchParams({ owner, name, number: String(number), resource: "detail" });
+      const reviewsQuery = new URLSearchParams({ owner, name, number: String(number), resource: "reviews" });
+      const [pullResponse, reviewsResponse] = await Promise.all([
+        fetch("/api/repository-pulls?" + baseQuery.toString(), { cache: "no-store" }),
+        fetch("/api/repository-pulls?" + reviewsQuery.toString(), { cache: "no-store" }),
+      ]);
+      const pullPayload = (await pullResponse.json().catch(() => ({}))) as PullRequestEntry & { error?: string };
+      const reviewsPayload = (await reviewsResponse.json().catch(() => [])) as PullRequestReviewEntry[] | { error?: string };
+      if (!pullResponse.ok) {
+        setError(pullPayload.error ?? "Pull request could not be loaded.");
+        return;
+      }
+      setSelectedPullRequest(pullPayload);
+      if (reviewsResponse.ok && Array.isArray(reviewsPayload)) setPullRequestReviews(reviewsPayload);
+      else setPullRequestReviews([]);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setPullRequestBusy(false);
+    }
+  }
+
+  async function submitPullRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setPullRequestBusy(true);
+    try {
+      const response = await fetch("/api/repository-pulls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resource: "create",
+          owner,
+          name,
+          title: pullRequestTitle,
+          body: pullRequestBody,
+          head_ref: pullRequestHead,
+          base_ref: pullRequestBase,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as PullRequestEntry & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Pull request could not be opened.");
+        return;
+      }
+      setPullRequestTitle("");
+      setPullRequestBody("");
+      setSelectedPullRequest(payload);
+      await loadPullRequests();
+      setSelectedPullRequest(payload);
+      setView("pulls");
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setPullRequestBusy(false);
+    }
+  }
+
+  async function submitPullRequestReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPullRequest) return;
+    setError("");
+    setPullRequestBusy(true);
+    try {
+      const response = await fetch("/api/repository-pulls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resource: "review",
+          owner,
+          name,
+          number: selectedPullRequest.number,
+          state: reviewState,
+          body: reviewBody,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as PullRequestReviewEntry & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Review could not be submitted.");
+        return;
+      }
+      setReviewBody("");
+      await openPullRequest(selectedPullRequest.number);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setPullRequestBusy(false);
+    }
+  }
+
+  async function mergePullRequest() {
+    if (!selectedPullRequest) return;
+    setError("");
+    setPullRequestBusy(true);
+    try {
+      const response = await fetch("/api/repository-pulls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource: "merge", owner, name, number: selectedPullRequest.number }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as PullRequestEntry & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Pull request could not be merged.");
+        return;
+      }
+      setSelectedPullRequest(payload);
+      setPullRequests((current) => current.map((item) => item.number === payload.number ? payload : item));
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setPullRequestBusy(false);
+    }
+  }
+
+  async function changePullRequestState() {
+    if (!selectedPullRequest) return;
+    const nextState = selectedPullRequest.state === "open" ? "closed" : "open";
+    if (!window.confirm(`${nextState === "closed" ? "Close" : "Reopen"} pull request #${selectedPullRequest.number}?`)) return;
+    setError("");
+    setPullRequestBusy(true);
+    try {
+      const response = await fetch("/api/repository-pulls", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, name, number: selectedPullRequest.number, state: nextState }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as PullRequestEntry & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Pull request state could not be updated.");
+        return;
+      }
+      setSelectedPullRequest(payload);
+      setPullRequests((current) => current.map((item) => item.number === payload.number ? payload : item));
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setPullRequestBusy(false);
+    }
+  }
+
+  async function viewPullRequestDiff(pull: PullRequestEntry) {
+    setError("");
+    setLoading(true);
+    setView("diff");
+    setDiffBase(pull.base_ref);
+    setDiffHead(pull.head_ref);
+    try {
+      const query = new URLSearchParams({
+        resource: "diff",
+        owner,
+        name,
+        base: pull.base_ref,
+        head: pull.head_ref,
+      });
+      const response = await fetch("/api/repository-data?" + query.toString(), { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as DiffResult & { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Pull request diff could not be loaded.");
+        setDiffResult(null);
+        return;
+      }
+      setDiffResult(payload);
+    } catch {
+      setError("Could not reach the R!OTGIT API.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const loadIssues = useCallback(async () => {
     setView("issues");

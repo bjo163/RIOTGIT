@@ -125,3 +125,20 @@ cargo run -p riotgit -- --help
 ```
 
 See [API README](../apps/api/README.md), [CLI guide](../apps/cli/README.md), [Deployment](DEPLOYMENT.md), and [Backup/Restore](BACKUP-RESTORE.md).
+
+## P0–P2 delivery snapshot (2026-11-14)
+
+| Priority / issue | Current state | Evidence / remaining gate |
+| --- | --- | --- |
+| P0 #1 API contracts and boundaries | Foundation exists; not closed | API error conventions and architecture docs exist; typed config, request IDs, and complete module extraction still need verification. |
+| P0 #2 metadata/data access | SQLite foundation implemented; not closed | Versioned SQLite migrations exist; PostgreSQL adapter and cross-database tests are not implemented. |
+| P0 #3 repository lifecycle | Core path implemented; not closed | Native bare repo lifecycle exists; quota/size accounting, symlink adversarial tests, archive/delete/maintenance coverage remain. |
+| P0 #4 SSH transport | CI smoke path passed | Clone, push, protected direct-push denial, no-shell, and revocation passed in run #43494098100; read-only-key tests and deployment host-key review remain. |
+| P0 #17 dependency locking | Blocked / not implemented | Cargo/npm lockfiles are absent; CI still uses unlocked Cargo commands and npm install. |
+| P1 #5–#10 forge and identity | Partially implemented | HTTP, browser, collaboration, branch protection, issues, and SSH key registry exist; large-pack streaming, org/team RBAC, inline review, richer timeline, UI completeness, and E2E coverage remain. |
+| P1 #16 operations | Partial | Compose API/SSH build and SSH smoke pass in CI; web-container startup, isolated restore drill, upgrade/rollback, and failure drills remain. |
+| P2 #11 CLI | Initial implementation exists | Core login/repository/SSH-key commands exist; profiles, OS credential vault, JSON output, status, and dedicated CLI integration tests remain. |
+| P2 #12 jobs/webhooks | Not implemented | No durable outbox/worker or signed webhook delivery; SSRF-safe delivery must be designed before enabling outbound requests. |
+| P2 #13 CI runner | Not implemented | No isolated workflow runner; must remain a separate execution boundary from the API. |
+
+P2 is **not complete**. The current main branch has a passing baseline, but issues #11–#13 and P0 #17 remain open. Do not close P0–P2 issues until their full acceptance criteria and verification gates pass.

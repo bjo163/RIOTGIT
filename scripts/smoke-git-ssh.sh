@@ -128,6 +128,11 @@ fi
 
 curl --fail --silent --show-error -X DELETE "$API_BASE/api/v1/user/ssh-keys/$KEY_ID" \
   -H "Authorization: Bearer $TOKEN" >/dev/null
+if curl --fail --silent --show-error "$API_BASE/api/v1/user/ssh-keys" \
+  -H "Authorization: Bearer $TOKEN" | jq -e --arg key_id "$KEY_ID" 'any(.[]; .id == $key_id)' >/dev/null; then
+  echo "ERROR: API still lists the revoked SSH key." >&2
+  exit 1
+fi
 if git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
   echo "ERROR: revoked SSH key still authenticated." >&2
   exit 1

@@ -33,8 +33,10 @@ enum Commands {
         #[arg(long)]
         username: String,
     },
-    /// Show the currently authenticated identity.
+    /// Show the authenticated identity.
     Whoami,
+    /// Check server readiness and the current authenticated session.
+    Status,
     /// Repository operations.
     Repo {
         #[command(subcommand)]
@@ -182,6 +184,15 @@ impl Api {
 
     fn me(&self) -> Result<UserSummary> {
         Ok(serde_json::from_value(self.get("/api/v1/auth/me")?)?)
+    }
+
+    fn health(&self) -> Result<String> {
+        let response = self.client.get(self.endpoint("/health/ready")).send()?;
+        if !response.status().is_success() {
+            bail!("R!OTGIT server is not ready: {}", response.status());
+        }
+        let value: Value = response.json()?;
+        Ok(value.get("status").and_then(Value::as_str).unwrap_or("unknown").to_owned())
     }
 }
 
@@ -379,6 +390,17 @@ fn main() -> Result<()> {
             let api = Api::load()?;
             let user = api.me()?;
             println!("{} ({}) — {}", user.display_name, user.username, user.role);
+            Ok(())
+        }
+        Commands::Status => {
+            let api = Api::load()?;
+            let health = api.health()?;
+            let user = api.me()?;
+            println!("Server: {} ({health})", api.config.server);
+            println!("Account: {} ({}) — {}", user.display_name, user.username, user.role);
+            if let Some(expires_at) = api.config.expires_at {
+                println!("Session expires: {expires_at}");
+            }
             Ok(())
         }
         Commands::Repo { command } => {

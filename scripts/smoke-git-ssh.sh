@@ -67,7 +67,46 @@ git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
 git -C "$CLONE_DIR" push --quiet origin main
 
-# Branch rules must apply through SSH receive-pack, not only Smart HTTP.
+# A read-only account must clone successfully but must not receive-pack.
+READER_USERNAME="ci-reader"
+READER_PASSWORD="R!OTGIT-CI-Reader-Password-1234"
+READER_KEY="$TMP_DIR/ssh-reader"
+READER_KNOWN_HOSTS="$TMP_DIR/reader_known_hosts"
+READER_CLONE="$TMP_DIR/reader-clone"
+
+curl --fail --silent --show-error -X POST "$API_BASE/api/v1/admin/users" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg username "$READER_USERNAME" --arg password "$READER_PASSWORD" '{username:$username,display_name:"CI Read Only",password:$password,role:"member}')" >/dev/null
+
+ssh-keygen -q -t ed25519 -N "" -f "$READER_KEY"
+READER_PUBLIC_KEY="$(cat "$READER_KEY.pub")"
+READER_TOKEN="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg username "$READER_USERNAME" --arg password "$READER_PASSWORD" '{username:$username,password:$password}')" \
+  | jq -er '.access_token')"
+READER_KEY_ID="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/user/ssh-keys" \
+  -H "Authorization: Bearer $READER_TOKEN" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg public_key "$READER_PUBLIC_KEY" '{public_key:$public_key}')" | jq -er '.id')"
+
+curl --fail --silent --show-error -X PUT "$API_BASE/api/v1/repositories/$ADMIN_USERNAME/$REPO_NAME/access/$READER_USERNAME" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"permission":"read"}' >/dev/null
+
+GIT_SSH_COMMAND="ssh -i $READER_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$READER_KNOWN_HOSTS -o BatchMode=yes"
+ssh-keyscan -T 5 -t ed25519 -p "$SSH_PORT" 127.0.0.1 2>/dev/null >"$READER_KNOWN_HOSTS"
+READER_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
+GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
+git -C "$READER_CLONE" config user.name "R!OTGIT SSH Read-Only CI"
+git -C "$READER_CLONE" config user.email "riotgit-ssh-readonly-ci@example.invalid"
+printf 'Read-only account must not push this change\\n' >>"$READER_CLONE/README.md"
+git -C "$READER_CLONE" add README.md
+git -C "$READER_CLONE" commit -m "test: read-only SSH push must fail" >/dev/null
+if GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then
+  echo "ERROR: SSH read-only account was able to push." >&2
+  exit 1
+fi
+
+# Branch rules must apply to SSH receive-pack, not only Smart HTTP.
 curl --fail --silent --show-error -X POST "$API_BASE/api/v1/repositories/$ADMIN_USERNAME/$REPO_NAME/branch-protection" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"branch_name":"main","require_pull_request":true,"prevent_force_push":true,"prevent_deletion":true}' >/dev/null

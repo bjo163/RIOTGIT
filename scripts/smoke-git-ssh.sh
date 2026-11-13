@@ -98,7 +98,7 @@ READER_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
 GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
 git -C "$READER_CLONE" config user.name "R!OTGIT SSH Read-Only CI"
 git -C "$READER_CLONE" config user.email "riotgit-ssh-readonly-ci@example.invalid"
-printf 'Read-only account must not push this change\\n' >>"$READER_CLONE/README.md"
+printf 'Read-only account must not push this change\n' >>"$READER_CLONE/README.md"
 git -C "$READER_CLONE" add README.md
 git -C "$READER_CLONE" commit -m "test: read-only SSH push must fail" >/dev/null
 if GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then

@@ -30,7 +30,7 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Same-origin guard for mutating Next.js web API routes.
 - Docker-volume backup/restore scripts and recovery runbook (restore drill still required).
 
-See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/42893061450).
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/43494098100).
 
 ## Terminal CLI
 

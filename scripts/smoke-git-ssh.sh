@@ -76,7 +76,7 @@ READER_CLONE="$TMP_DIR/reader-clone"
 
 curl --fail --silent --show-error -X POST "$API_BASE/api/v1/admin/users" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "$(jq -n --arg username "$READER_USERNAME" --arg password "$READER_PASSWORD" '{username:$username,display_name:"CI Read Only",password:$password,role:"member}')" >/dev/null
+  -d "$(jq -n --arg username "$READER_USERNAME" --arg password "$READER_PASSWORD" '{username:$username,display_name:"CI Read Only",password:$password,role:"member"}')" >/dev/null
 
 ssh-keygen -q -t ed25519 -N "" -f "$READER_KEY"
 READER_PUBLIC_KEY="$(cat "$READER_KEY.pub")"

@@ -90,12 +90,12 @@ curl --fail --silent "$TARGET_WEB_URL/login" >/dev/null || fail "Target Web did 
 
 for attempt in $(seq 1 30); do
   ssh-keyscan -T 2 -t ed25519 -p "$TARGET_SSH_PORT" 127.0.0.1 2>/dev/null \
-    | awk '{print $2, $3}' | sort > "$TMP_DIR/target-hostkey-before" || true
+    | awk '!/^#/ && NF >= 3 { print $2, $3 }' | sort > "$TMP_DIR/target-hostkey-before" || true
   if [[ -s "$TMP_DIR/target-hostkey-before" ]]; then break; fi
   sleep 1
 done
 test -s "$TMP_DIR/target-hostkey-before" || fail "Target SSH gateway did not publish a host key."
-awk '{print $2, $3}' "$SOURCE_HOSTKEY_FILE" | sort > "$TMP_DIR/source-hostkey"
+awk '!/^#/ && NF >= 3 { print $2, $3 }' "$SOURCE_HOSTKEY_FILE" | sort > "$TMP_DIR/source-hostkey"
 SSH_ARCHIVE="${DATA_ARCHIVE%.tar.gz}-ssh-hostkeys.tar.gz"
 SSH_HOSTKEY_ENTRY="$(tar -tzf "$SSH_ARCHIVE" | grep -F 'ssh_host_ed25519_key.pub' | head -n 1 || true)"
 [[ -n "$SSH_HOSTKEY_ENTRY" ]] || fail "Source SSH host-key archive is missing ssh_host_ed25519_key.pub."
@@ -135,7 +135,7 @@ curl --fail --silent "$TARGET_WEB_URL/login" >/dev/null || fail "Restored target
 
 for attempt in $(seq 1 30); do
   ssh-keyscan -T 2 -t ed25519 -p "$TARGET_SSH_PORT" 127.0.0.1 2>/dev/null \
-    | awk '{print $2, $3}' | sort > "$TMP_DIR/target-hostkey-after" || true
+    | awk '!/^#/ && NF >= 3 { print $2, $3 }' | sort > "$TMP_DIR/target-hostkey-after" || true
   if [[ -s "$TMP_DIR/target-hostkey-after" ]]; then break; fi
   sleep 1
 done

@@ -28,7 +28,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --all-targets --locked
-      - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh
+      - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh scripts/smoke-git-ssh-restore.sh
       - name: Git smart HTTP round-trip
         run: bash scripts/smoke-git-http.sh
 
@@ -95,6 +95,8 @@ jobs:
       - name: Start restricted SSH gateway
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build ssh
       - name: Verify SSH clone, push, permissions, and revocation
+        env:
+          RIOTGIT_SSH_SMOKE_STATE_FILE: ${{ runner.temp }}/riotgit-ssh-smoke-state
         run: |
           set -a
           . ./.env
@@ -124,9 +126,35 @@ jobs:
           DATA_ARCHIVE="$(find "$RIOTGIT_BACKUP_DIR" -maxdepth 1 -type f -name 'riotgit-data-*.tar.gz' ! -name '*-ssh-hostkeys.tar.gz' -print | sort | tail -n 1)"
           test -n "$DATA_ARCHIVE"
           test -f "$DATA_ARCHIVE.sha256"
-
           printf 'RESTORE\n' | bash scripts/restore.sh "$DATA_ARCHIVE"
 
+          API_CONTAINER="$(docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh ps -q api)"
+          DATA_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/riotgit"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$API_CONTAINER")"
+          test -n "$DATA_VOLUME"
+
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh stop api web ssh
+          docker run --rm -v "$DATA_VOLUME:/data:ro" alpine:3.22 sh -s <<'AUDIT'
+          set -eu
+          apk add --no-cache sqlite >/dev/null
+          successes="$(sqlite3 /data/riotgit.db "SELECT COUNT(*) FROM audit_events WHERE action = 'git.ssh.success' AND actor_user_id IS NOT NULL AND resource_type = 'repository' AND resource_id IS NOT NULL AND json_extract(metadata_json, '$.transport') = 'ssh' AND json_extract(metadata_json, '$.operation') IN ('git-upload-pack', 'git-receive-pack')")"
+          denials="$(sqlite3 /data/riotgit.db "SELECT COUNT(*) FROM audit_events WHERE action = 'git.ssh.branch_policy_denied' AND actor_user_id IS NOT NULL AND resource_type = 'repository' AND resource_id IS NOT NULL AND json_extract(metadata_json, '$.transport') = 'ssh'")"
+          test "$successes" -ge 2
+          test "$denials" -ge 1
+          echo "SSH audit evidence: successes=$successes policy-denials=$denials"
+          AUDIT
+
+          docker run --rm --network none -v "$DATA_VOLUME:/var/lib/riotgit:ro" --entrypoint sh riotgit/api:local -ec '
+            count=0
+            for repository in /var/lib/riotgit/repositories/*.git; do
+              [ -d "$repository" ] || continue
+              git --git-dir="$repository" fsck --full
+              count=$((count + 1))
+            done
+            test "$count" -gt 0
+            echo "git fsck passed for $count restored repositories."
+          '
+
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh start api web ssh
           for attempt in $(seq 1 60); do
             if curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null \
               && curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null; then
@@ -136,11 +164,9 @@ jobs:
           done
           curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null
           curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null
-
           ssh-keyscan -T 5 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
           diff -u "$RUNNER_TEMP/riotgit-ssh-hostkey-before" "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
-
-          bash scripts/smoke-git-ssh.sh
+          bash scripts/smoke-git-ssh-restore.sh "$RUNNER_TEMP/riotgit-ssh-smoke-state"
       - name: Collect service logs on failure
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh logs --tail=200 api ssh

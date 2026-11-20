@@ -69,6 +69,21 @@ git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
 GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push --quiet origin main
 
+if [[ -n "${RIOTGIT_SSH_SMOKE_STATE_FILE:-}" ]]; then
+  mkdir -p "$(dirname "$RIOTGIT_SSH_SMOKE_STATE_FILE")"
+  printf '%s/%s\n' "$ADMIN_USERNAME" "$REPO_NAME" > "$RIOTGIT_SSH_SMOKE_STATE_FILE"
+  chmod 600 "$RIOTGIT_SSH_SMOKE_STATE_FILE"
+fi
+
+# An unregistered SSH key must not access a private repository.
+UNKNOWN_KEY="$TMP_DIR/ssh-unknown"
+ssh-keygen -q -t ed25519 -N "" -f "$UNKNOWN_KEY"
+UNKNOWN_GIT_SSH_COMMAND="ssh -i $UNKNOWN_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
+if GIT_SSH_COMMAND="$UNKNOWN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
+  echo "ERROR: an unregistered SSH key accessed a private repository." >&2
+  exit 1
+fi
+
 # A read-only account must clone successfully but must not receive-pack.
 READER_USERNAME="ci-reader-${REPO_SUFFIX}"
 READER_PASSWORD="R!OTGIT-CI-Reader-Password-1234"
@@ -126,6 +141,15 @@ if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \
   -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \
   git@127.0.0.1 true >/dev/null 2>&1; then
   echo "ERROR: restricted Git account accepted an interactive command." >&2
+  exit 1
+fi
+
+# Git-only keys must not be granted OpenSSH stdio/TCP forwarding.
+if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \\
+  -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" \\
+  -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \\
+  -W 127.0.0.1:22 git@127.0.0.1 </dev/null >/dev/null 2>&1; then
+  echo "ERROR: Git-only SSH key retained TCP forwarding capability." >&2
   exit 1
 fi
 

@@ -42,9 +42,11 @@ The SSH user name is always `git`; the registered public key identifies the R!OT
 - `ExposeAuthInfo` binds the forced command to the actual public key used for authentication.
 - All sessions run the forced `riotgit-ssh` command; no shell is provided.
 - Only Git upload-pack and receive-pack are accepted.
-- Repository permissions are checked for every transport invocation.
+- Repository permissions are checked for every transport invocation; unknown and revoked keys are denied for new sessions.
+- SSH transport audit events record actor, repository, transport, and Git operation without private key material.
 - receive-pack uses a controlled global `pre-receive` hook to enforce the same branch-protection intent as Smart HTTP.
 - SSH host keys use a dedicated persistent volume.
 - The gateway shares the API data volume and service UID to preserve SQLite and bare repository ownership.
+- CI verifies unknown-key denial, read-only push denial, branch-policy audit records, shell restriction, and rejected TCP forwarding.
 
 The first release of this gateway should be treated as **experimental** until the SSH smoke test passes against the deployment being used. Do not expose the port publicly without reviewing the host-key fingerprint and firewall policy.

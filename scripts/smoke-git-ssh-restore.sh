@@ -15,8 +15,7 @@ KEY_ID=""
 
 cleanup() {
   if [[ -n "$TOKEN" && -n "$KEY_ID" ]]; then
-    curl --fail --silent --show-error -X DELETE "$API_BASE/api/v1/user/ssh-keys/$KEY_ID" \\
-      -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+    curl --fail --silent --show-error -X DELETE "$API_BASE/api/v1/user/ssh-keys/$KEY_ID" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
   fi
   rm -rf "$TMP_DIR"
 }

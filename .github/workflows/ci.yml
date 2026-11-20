@@ -43,12 +43,72 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
       - name: Verify pinned npm version
         run: test "$(npm --version)" = "$(cat .npm-version)"
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+
+  dependency-security:
+    name: Dependency security and license inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Verify pinned npm version
+        working-directory: apps/web
+        run: test "$(npm --version)" = "$(cat .npm-version)"
+      - name: Install web dependencies from lockfile
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned RustSec cargo-audit
+        run: cargo install cargo-audit --version 0.23.0 --locked
+      - name: Audit Rust dependencies
+        id: rust-audit
+        continue-on-error: true
+        run: cargo audit --json > "$RUNNER_TEMP/cargo-audit.json"
+      - name: Audit npm dependencies
+        id: npm-audit
+        continue-on-error: true
+        working-directory: apps/web
+        run: npm audit --audit-level=high --json > "$RUNNER_TEMP/npm-audit.json"
+      - name: Generate Rust and npm license inventory
+        run: node scripts/dependency-license-inventory.mjs "$RUNNER_TEMP/dependency-license-inventory.tsv"
+      - name: Upload dependency security and license reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-security-reports
+          path: |
+            ${{ runner.temp }}/cargo-audit.json
+            ${{ runner.temp }}/npm-audit.json
+            ${{ runner.temp }}/dependency-license-inventory.tsv
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Enforce dependency audit results
+        if: always()
+        env:
+          RUST_AUDIT_OUTCOME: ${{ steps.rust-audit.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm-audit.outcome }}
+        run: |
+          test "$RUST_AUDIT_OUTCOME" = "success" || {
+            echo "Rust dependency audit did not pass."
+            exit 1
+          }
+          test "$NPM_AUDIT_OUTCOME" = "success" || {
+            echo "npm dependency audit did not pass."
+            exit 1
+          }
 
   ssh:
     name: OpenSSH Git transport

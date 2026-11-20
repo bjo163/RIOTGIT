@@ -28,6 +28,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+      - name: Record the exact npm version used for the lockfile
+        working-directory: apps/web
+        run: npm --version > .npm-version
       - name: Generate npm lockfile
         working-directory: apps/web
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -38,6 +41,7 @@ jobs:
           path: |
             Cargo.lock
             apps/web/package-lock.json
+            apps/web/.npm-version
           if-no-files-found: error
       - name: Commit lockfiles to the same-repository stabilization branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/stabilization-nov20'
@@ -46,7 +50,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock apps/web/package-lock.json
+          git add Cargo.lock apps/web/package-lock.json apps/web/.npm-version
           if git diff --cached --quiet; then
             echo "Dependency lockfiles are already up to date."
             exit 0

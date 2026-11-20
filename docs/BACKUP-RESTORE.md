@@ -20,7 +20,7 @@ Backups default to `./backups` (mode 0700 where supported). Override with `RIOTG
 bash scripts/restore.sh ./backups/riotgit-data-YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
-The companion SSH archive is discovered by filename. Restore validates obvious absolute/parent-traversal paths, requires the exact confirmation word `RESTORE`, stops active writers, restores the data volume and optional SSH identity volume, and restarts only previously running services.
+The companion SSH archive is discovered by filename. When SHA-256 sidecars are present (as produced by the backup script), restore verifies the data and SSH archive checksums before stopping any service or modifying a volume. Legacy archives without sidecars emit an explicit warning. Restore validates archive readability and obvious absolute/parent-traversal paths, requires the exact confirmation word `RESTORE`, stops active writers, restores the data volume and optional SSH identity volume, and restarts only previously running services.
 
 After restore, verify:
 

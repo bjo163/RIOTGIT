@@ -186,6 +186,24 @@ jobs:
           DATA_ARCHIVE="$(find "$RIOTGIT_BACKUP_DIR" -maxdepth 1 -type f -name 'riotgit-data-*.tar.gz' ! -name '*-ssh-hostkeys.tar.gz' -print | sort | tail -n 1)"
           test -n "$DATA_ARCHIVE"
           test -f "$DATA_ARCHIVE.sha256"
+
+          CORRUPT_ARCHIVE="${DATA_ARCHIVE%.tar.gz}-corrupt.tar.gz"
+          cp "$DATA_ARCHIVE" "$CORRUPT_ARCHIVE"
+          printf '\ncorruption' >> "$CORRUPT_ARCHIVE"
+          cp "$DATA_ARCHIVE.sha256" "$CORRUPT_ARCHIVE.sha256"
+          if printf 'RESTORE\n' | bash scripts/restore.sh "$CORRUPT_ARCHIVE" > "$RUNNER_TEMP/restore-checksum-preflight.log" 2>&1; then
+            echo "Corrupted restore archive was unexpectedly accepted." >&2
+            exit 1
+          fi
+          grep -Fq "Archive checksum mismatch" "$RUNNER_TEMP/restore-checksum-preflight.log" || {
+            cat "$RUNNER_TEMP/restore-checksum-preflight.log" >&2
+            echo "Restore rejected the corrupted archive for an unexpected reason." >&2
+            exit 1
+          }
+          rm -f "$CORRUPT_ARCHIVE" "$CORRUPT_ARCHIVE.sha256"
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null
+
           printf 'RESTORE\n' | bash scripts/restore.sh "$DATA_ARCHIVE"
 
           API_CONTAINER="$(docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh ps -q api)"

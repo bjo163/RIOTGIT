@@ -5,12 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use base64::{
-    Engine as _,
-    engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
-};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use sqlx::{
     FromRow, SqlitePool,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},

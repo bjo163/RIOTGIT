@@ -24,9 +24,29 @@ restart_services() {
 }
 trap restart_services EXIT
 
+verify_checksum() {
+  local archive="$1"
+  local checksum_file="$archive.sha256"
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    log "WARNING: sha256sum is unavailable; archive integrity cannot be verified."
+    return 0
+  fi
+  if [[ ! -f "$checksum_file" ]]; then
+    log "WARNING: checksum sidecar is missing for $archive; restoring an unverified legacy archive."
+    return 0
+  fi
+
+  local expected actual
+  read -r expected _ < "$checksum_file" || fail "Checksum sidecar is empty: $checksum_file"
+  [[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] || fail "Checksum sidecar is malformed: $checksum_file"
+  actual="$(sha256sum "$archive" | awk '{print $1}')"
+  [[ "$actual" == "$expected" ]] || fail "Archive checksum mismatch: $archive"
+}
+
 validate_archive() {
   local archive="$1"
   [[ -f "$archive" ]] || fail "Archive not found: $archive"
+  tar -tzf "$archive" >/dev/null || fail "Archive is corrupt or unreadable: $archive"
   while IFS= read -r entry; do
     normalized="$(printf '%s' "$entry" | sed 's#^\./##')"
     case "$normalized" in /*|..|../*|*/../*|*/.. ) fail "Unsafe archive path: $entry" ;; esac
@@ -35,10 +55,15 @@ validate_archive() {
 
 [[ $# -eq 1 ]] || fail "Usage: scripts/restore.sh <data-archive.tar.gz>"
 ARCHIVE="$(realpath "$1")"
+verify_checksum "$ARCHIVE"
 validate_archive "$ARCHIVE"
 SSH_ARCHIVE="${ARCHIVE%.tar.gz}-ssh-hostkeys.tar.gz"
 HAS_SSH_ARCHIVE=0
-if [[ -f "$SSH_ARCHIVE" ]]; then validate_archive "$SSH_ARCHIVE"; HAS_SSH_ARCHIVE=1; fi
+if [[ -f "$SSH_ARCHIVE" ]]; then
+  verify_checksum "$SSH_ARCHIVE"
+  validate_archive "$SSH_ARCHIVE"
+  HAS_SSH_ARCHIVE=1
+fi
 
 command -v docker >/dev/null 2>&1 || fail "Docker CLI is required."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required."

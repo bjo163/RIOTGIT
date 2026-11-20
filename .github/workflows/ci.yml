@@ -64,10 +64,10 @@ jobs:
             echo "RIOTGIT_WEB_PORT=3000"
             echo "RIOTGIT_SSH_PORT=2222"
           } > .env
-      - name: Build API and SSH images
-        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh build api ssh
-      - name: Start API service
-        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --no-build api
+      - name: Build API, web, and SSH images
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh build api web ssh
+      - name: Start API and web services
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build api web
       - name: Wait for API readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -78,6 +78,17 @@ jobs:
             sleep 2
           done
           docker compose -f deploy/compose/docker-compose.yml --env-file .env logs --tail=160 api
+          exit 1
+      - name: Wait for web readiness
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/login >/dev/null; then
+              echo "Web application is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env logs --tail=160 web
           exit 1
       - name: Start restricted SSH gateway
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build ssh

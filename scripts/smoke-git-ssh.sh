@@ -54,18 +54,18 @@ for _ in $(seq 1 40); do
 done
 [[ "$READY" -eq 1 ]] || { echo "SSH gateway did not become ready on port $SSH_PORT" >&2; exit 1; }
 
-export GIT_SSH_COMMAND="ssh -i $KEY_FILE -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes"
+ADMIN_GIT_SSH_COMMAND="ssh -i $KEY_FILE -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
 CLONE_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
 CLONE_DIR="$TMP_DIR/clone"
 
-git clone --quiet "$CLONE_URL" "$CLONE_DIR"
+GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git clone --quiet "$CLONE_URL" "$CLONE_DIR"
 git -C "$CLONE_DIR" config user.name "R!OTGIT SSH CI"
 git -C "$CLONE_DIR" config user.email "riotgit-ssh-ci@example.invalid"
 printf 'SSH transport round-trip passed\n' >"$CLONE_DIR/README.md"
 git -C "$CLONE_DIR" branch -M main
 git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
-git -C "$CLONE_DIR" push --quiet origin main
+GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push --quiet origin main
 
 # A read-only account must clone successfully but must not receive-pack.
 READER_USERNAME="ci-reader"
@@ -92,16 +92,16 @@ curl --fail --silent --show-error -X PUT "$API_BASE/api/v1/repositories/$ADMIN_U
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"permission":"read"}' >/dev/null
 
-GIT_SSH_COMMAND="ssh -i $READER_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$READER_KNOWN_HOSTS -o BatchMode=yes"
+READER_GIT_SSH_COMMAND="ssh -i $READER_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$READER_KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
 ssh-keyscan -T 5 -t ed25519 -p "$SSH_PORT" 127.0.0.1 2>/dev/null >"$READER_KNOWN_HOSTS"
 READER_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
-GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
+GIT_SSH_COMMAND="$READER_GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
 git -C "$READER_CLONE" config user.name "R!OTGIT SSH Read-Only CI"
 git -C "$READER_CLONE" config user.email "riotgit-ssh-readonly-ci@example.invalid"
 printf 'Read-only account must not push this change\n' >>"$READER_CLONE/README.md"
 git -C "$READER_CLONE" add README.md
 git -C "$READER_CLONE" commit -m "test: read-only SSH push must fail" >/dev/null
-if GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$READER_GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then
   echo "ERROR: SSH read-only account was able to push." >&2
   exit 1
 fi
@@ -113,7 +113,7 @@ curl --fail --silent --show-error -X POST "$API_BASE/api/v1/repositories/$ADMIN_
 printf 'This protected direct push must be denied\n' >>"$CLONE_DIR/README.md"
 git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: protected SSH direct push must fail" >/dev/null
-if git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
   echo "ERROR: SSH direct push bypassed branch protection." >&2
   exit 1
 fi
@@ -121,7 +121,8 @@ fi
 # No interactive shell may be obtained through the Git account.
 if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" \
-  -o BatchMode=yes git@127.0.0.1 true >/dev/null 2>&1; then
+  -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \
+  git@127.0.0.1 true >/dev/null 2>&1; then
   echo "ERROR: restricted Git account accepted an interactive command." >&2
   exit 1
 fi
@@ -133,7 +134,7 @@ if curl --fail --silent --show-error "$API_BASE/api/v1/user/ssh-keys" \
   echo "ERROR: API still lists the revoked SSH key." >&2
   exit 1
 fi
-if git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
   echo "ERROR: revoked SSH key still authenticated." >&2
   exit 1
 fi

@@ -1,13 +1,18 @@
 # R!OTGIT — Implementation Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-20
 
-## Verified baseline
+## Verified baseline and current main snapshot
 
-The current main-branch commit `35d5c21e5feb188f5678ef77dc8e44c21083e003` passed the complete CI pipeline:
+The last known fully green main-branch baseline is commit `35d5c21e5feb188f5678ef77dc8e44c21083e003` (CI run #233):
 https://github.com/bjo163/RIOTGIT/actions/runs/43494098100
 
-The run passed Web checks, Rust checks, and the OpenSSH Git transport smoke test. This verifies the CI path only; it does not replace a separate-host restore drill, deployment-specific SSH host-key review, or production security assessment. This document intentionally separates committed implementation from tested/production-ready capability.
+The current main snapshot inspected on 2026-11-20 is commit `d9e6257d4072a7b23917a04068d207fea4042cb8` (CI run #243):
+https://github.com/bjo163/RIOTGIT/actions/runs/43497718230
+
+Run #243 is **red**: Web checks passed; Rust checks stopped at `cargo fmt --all -- --check` because two expressions in `apps/cli/src/main.rs` were not rustfmt-formatted; the OpenSSH smoke job failed its final revocation assertion. Code inspection found that the smoke script initially exports the administrator `GIT_SSH_COMMAND`, then reassigns that already-exported variable to the reader identity. Bash preserves the export attribute, so later administrator-only branch-protection and revocation assertions can run with the reader key instead. The fix keeps administrator and reader SSH commands in separate variables and explicitly selects the identity for every Git operation. The previous run therefore does **not** prove an SSH service revocation defect; the corrected end-to-end test must pass before revocation can be considered verified again.
+
+This is a CI-only diagnosis from source/log inspection; it is not a substitute for a fresh successful run, a separate-host restore drill, deployment-specific SSH host-key review, or production security assessment. This document intentionally separates committed implementation from tested/production-ready capability.
 
 ## Implemented and committed
 
@@ -27,7 +32,7 @@ The run passed Web checks, Rust checks, and the OpenSSH Git transport smoke test
 - [x] Read/write permissions applied to Git Smart HTTP.
 - [x] Per-username login failure throttle (10 failed attempts in 15 minutes).
 - [x] SSH public-key registration/list/revocation API with key type/blob validation and SHA-256 fingerprints.
-- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; CI verifies clone, push, branch-protection denial, no interactive shell, and key revocation.
+- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; the last known green CI baseline verified clone/push and SSH restrictions. The latest smoke assertion needs re-verification after the test identity-selection fix.
 - [x] Same-origin guard for mutating Next.js web API routes.
 - [x] Emergency instance-admin token.
 
@@ -53,7 +58,7 @@ The run passed Web checks, Rust checks, and the OpenSSH Git transport smoke test
 ### Operations
 - [x] Rust and web Dockerfiles plus single-node Compose profile.
 - [x] Non-root runtime users, read-only container root filesystems, loopback host bindings, persistent data volume, and health checks.
-- [x] GitHub Actions Rust/web CI, Git Smart HTTP smoke coverage, and OpenSSH end-to-end smoke coverage (latest run passed).
+- [x] GitHub Actions Rust/web CI, Git Smart HTTP smoke coverage, and OpenSSH end-to-end smoke coverage are implemented. The last known green baseline is run #233; run #243 failed and run #244+ must verify the stabilization fixes.
 - [x] Backup and restore scripts for the complete single-node data volume.
 - [x] Backup/restore runbook with pre-restore safety snapshot and checksum instructions.
 
@@ -91,7 +96,7 @@ The run passed Web checks, Rust checks, and the OpenSSH Git transport smoke test
 
 ## Important limitations
 
-- Git Smart HTTP and the optional SSH clone/push path are covered by the latest successful CI smoke run; deployment-specific host-key persistence and broader compatibility still need review.
+- Git Smart HTTP and the optional SSH path passed the last known green baseline (#233). The latest run (#243) failed at its revocation assertion; code inspection traced the assertion to SSH identity leakage in the smoke script, which is being corrected and requires a fresh green run.
 - Branch protection is covered on both Smart HTTP and SSH receive-pack paths by the current CI smoke checks; broader shared-policy regression coverage is still required.
 - Login throttling is per normalized username, not IP-aware. It reduces repeated guessing but can be used to temporarily throttle a known username.
 - The current CI covers Rust/web checks, Smart HTTP round-trip, and SSH clone/push/security smoke checks. CLI behavior is compiled and checked by Rust workspace CI; backup/restore still needs an actual isolated restore drill.
@@ -133,7 +138,7 @@ See [API README](../apps/api/README.md), [CLI guide](../apps/cli/README.md), [De
 | P0 #1 API contracts and boundaries | Foundation exists; not closed | API error conventions and architecture docs exist; typed config, request IDs, and complete module extraction still need verification. |
 | P0 #2 metadata/data access | SQLite foundation implemented; not closed | Versioned SQLite migrations exist; PostgreSQL adapter and cross-database tests are not implemented. |
 | P0 #3 repository lifecycle | Core path implemented; not closed | Native bare repo lifecycle exists; quota/size accounting, symlink adversarial tests, archive/delete/maintenance coverage remain. |
-| P0 #4 SSH transport | CI smoke path passed | Clone, push, protected direct-push denial, no-shell, and revocation passed in run #43494098100; read-only-key tests and deployment host-key review remain. |
+| P0 #4 SSH transport | Implemented; latest CI retest required | Baseline #233 passed; #243 revocation assertion used a leaked reader SSH identity in later admin checks. Corrected identity isolation and fresh E2E verification are required. |
 | P0 #17 dependency locking | Blocked / not implemented | Cargo/npm lockfiles are absent; CI still uses unlocked Cargo commands and npm install. |
 | P1 #5–#10 forge and identity | Partially implemented | HTTP, browser, collaboration, branch protection, issues, and SSH key registry exist; large-pack streaming, org/team RBAC, inline review, richer timeline, UI completeness, and E2E coverage remain. |
 | P1 #16 operations | Partial | Compose API/SSH build and SSH smoke pass in CI; web-container startup, isolated restore drill, upgrade/rollback, and failure drills remain. |

@@ -192,7 +192,11 @@ impl Api {
             bail!("R!OTGIT server is not ready: {}", response.status());
         }
         let value: Value = response.json()?;
-        Ok(value.get("status").and_then(Value::as_str).unwrap_or("unknown").to_owned())
+        Ok(value
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_owned())
     }
 }
 
@@ -397,7 +401,10 @@ fn main() -> Result<()> {
             let health = api.health()?;
             let user = api.me()?;
             println!("Server: {} ({health})", api.config.server);
-            println!("Account: {} ({}) — {}", user.display_name, user.username, user.role);
+            println!(
+                "Account: {} ({}) — {}",
+                user.display_name, user.username, user.role
+            );
             if let Some(expires_at) = api.config.expires_at {
                 println!("Session expires: {expires_at}");
             }

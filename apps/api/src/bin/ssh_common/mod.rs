@@ -1,3 +1,6 @@
+#[path = "../../ssh_public_key.rs"]
+mod ssh_public_key;
+
 use std::{
     env,
     path::{Path, PathBuf},

@@ -19,7 +19,7 @@ async function expectFailure(label, command, args, options, pattern) {
       timeout: 90_000
     });
   } catch (error) {
-    const output = (error.stdout ?? "") + "\n" + (error.stderr ?? "");
+    const output = ((error.stdout ?? "") + "\n" + (error.stderr ?? "")).replace(/\u001b\[[0-9;]*m/g, "");
     if (!pattern.test(output)) {
       throw new Error(label + " rejected drift for an unexpected reason:\n" + output.slice(-4000));
     }
@@ -54,7 +54,7 @@ try {
     "cargo",
     ["metadata", "--format-version", "1", "--manifest-path", join(temporaryRoot, "Cargo.toml"), "--locked"],
     { cwd: temporaryRoot },
-    /lock file.*needs to be updated|needs to be updated but.*locked.*was passed/i
+    /cannot update the lock file .* because --locked was passed to prevent this|lock file.*needs to be updated/i
   );
 
   const webManifestPath = join(temporaryRoot, "apps", "web", "package.json");

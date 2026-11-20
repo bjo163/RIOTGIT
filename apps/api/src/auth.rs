@@ -632,24 +632,7 @@ fn parse_ssh_public_key(value: &str) -> Result<(String, String, String), &'stati
         );
     }
 
-    let blob = STANDARD
-        .decode(encoded)
-        .map_err(|_| "Public key data is not valid base64.")?;
-    if blob.len() < 8 {
-        return Err("Public key data is too short.");
-    }
-    let key_type_length = u32::from_be_bytes(
-        blob[0..4]
-            .try_into()
-            .map_err(|_| "Public key data is malformed.")?,
-    ) as usize;
-    if key_type_length != key_type.len()
-        || blob.get(4..4 + key_type_length) != Some(key_type.as_bytes())
-    {
-        return Err("Public key type does not match its encoded key data.");
-    }
-
-    let fingerprint = format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(&blob)));
+    let fingerprint = crate::ssh_public_key::fingerprint(key_type, encoded)?;
     Ok((key_type.to_owned(), encoded.to_owned(), fingerprint))
 }
 

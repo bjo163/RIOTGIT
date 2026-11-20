@@ -96,6 +96,17 @@ for attempt in $(seq 1 30); do
 done
 test -s "$TMP_DIR/target-hostkey-before" || fail "Target SSH gateway did not publish a host key."
 awk '{print $2, $3}' "$SOURCE_HOSTKEY_FILE" | sort > "$TMP_DIR/source-hostkey"
+SSH_ARCHIVE="${DATA_ARCHIVE%.tar.gz}-ssh-hostkeys.tar.gz"
+SSH_HOSTKEY_ENTRY="$(tar -tzf "$SSH_ARCHIVE" | grep -F 'ssh_host_ed25519_key.pub' | head -n 1 || true)"
+[[ -n "$SSH_HOSTKEY_ENTRY" ]] || fail "Source SSH host-key archive is missing ssh_host_ed25519_key.pub."
+ARCHIVE_PUBLIC_KEY="$(tar -xOzf "$SSH_ARCHIVE" "$SSH_HOSTKEY_ENTRY" | awk 'NF >= 2 { print $1, $2; exit }')"
+SOURCE_PUBLIC_KEY="$(awk 'NF >= 2 { print $1, $2; exit }' "$TMP_DIR/source-hostkey")"
+[[ -n "$ARCHIVE_PUBLIC_KEY" && "$ARCHIVE_PUBLIC_KEY" == "$SOURCE_PUBLIC_KEY" ]] || {
+  log "Source host key and archived host key do not match."
+  log "Source: $SOURCE_PUBLIC_KEY"
+  log "Archive: $ARCHIVE_PUBLIC_KEY"
+  fail "Backup archive does not contain the SSH host key advertised by the source instance."
+}
 if cmp -s "$TMP_DIR/source-hostkey" "$TMP_DIR/target-hostkey-before"; then
   fail "Fresh target Compose project unexpectedly reused the source SSH host key."
 fi
@@ -128,7 +139,18 @@ for attempt in $(seq 1 30); do
   if [[ -s "$TMP_DIR/target-hostkey-after" ]]; then break; fi
   sleep 1
 done
-cmp -s "$TMP_DIR/source-hostkey" "$TMP_DIR/target-hostkey-after" || fail "Restored target SSH host key does not match the source identity."
+TARGET_SSH_CONTAINER="$(target_compose ps -q ssh)"
+[[ -n "$TARGET_SSH_CONTAINER" ]] || fail "Restored target SSH container is not running."
+TARGET_SSH_HOSTKEY_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/ssh/hostkeys"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$TARGET_SSH_CONTAINER")"
+[[ -n "$TARGET_SSH_HOSTKEY_VOLUME" ]] || fail "Could not resolve the restored target SSH host-key volume."
+TARGET_VOLUME_PUBLIC_KEY="$(docker run --rm --network none -v "$TARGET_SSH_HOSTKEY_VOLUME:/data:ro" alpine:3.22 cat /data/ssh_host_ed25519_key.pub | awk 'NF >= 2 { print $1, $2; exit }')"
+TARGET_DAEMON_PUBLIC_KEY="$(awk 'NF >= 2 { print $1, $2; exit }' "$TMP_DIR/target-hostkey-after")"
+log "Source public host key: $SOURCE_PUBLIC_KEY"
+log "Backup public host key: $ARCHIVE_PUBLIC_KEY"
+log "Target mounted volume ($TARGET_SSH_HOSTKEY_VOLUME): $TARGET_VOLUME_PUBLIC_KEY"
+log "Target SSH daemon: $TARGET_DAEMON_PUBLIC_KEY"
+[[ "$TARGET_VOLUME_PUBLIC_KEY" == "$SOURCE_PUBLIC_KEY" ]] || fail "Target SSH host-key volume does not contain the source host key."
+[[ "$TARGET_DAEMON_PUBLIC_KEY" == "$TARGET_VOLUME_PUBLIC_KEY" ]] || fail "Target SSH daemon is not serving the public key stored in its mounted host-key volume."
 
 log "Verifying a pre-backup repository through the restored target SSH gateway."
 env \

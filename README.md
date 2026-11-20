@@ -21,7 +21,7 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Repository tree/blob browsing, commit history, and bounded base/head diff view.
 - Issues, comments, labels, and milestones in the repository workspace.
 - Pull request create/review/merge workflow with protected-branch approval checks.
-- Server-side branch protection for Git Smart HTTP receive-pack, with a settings UI.
+- Server-side branch protection for Git Smart HTTP and restricted OpenSSH receive-pack, with a settings UI.
 - Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
 - Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.
 - Docker Compose single-node profile and GitHub Actions checks.
@@ -37,7 +37,7 @@ See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the last known s
 Build:
 
 ```bash
-cargo build --release -p riotgit
+cargo build --locked --release -p riotgit
 ```
 
 Sign in and use common repository workflows:
@@ -111,7 +111,7 @@ Start the API:
 set -a
 . ./.env
 set +a
-cargo run -p riotgit-api
+cargo run --locked -p riotgit-api
 ```
 
 Default API: `http://127.0.0.1:8787`.
@@ -123,7 +123,7 @@ In another terminal:
 ```bash
 cd apps/web
 cp .env.example .env.local
-npm install
+npm ci
 npm run dev
 ```
 
@@ -153,7 +153,7 @@ It listens on port 2222 by default (loopback-bound). Configure firewall/port exp
 git clone ssh://git@your-host.example:2222/your-user/your-repo.git
 ```
 
-The SSH account is always `git`; the registered key identifies the application user. Interactive shell and forwarding are disabled. See [SSH gateway guide](apps/ssh/README.md). This gateway is experimental until the SSH CI integration and deployment-specific host-key/security checks pass.
+The SSH account is always `git`; the registered key identifies the application user. Interactive shell and forwarding are disabled. See [SSH gateway guide](apps/ssh/README.md). The SSH clone/push, read-only denial, branch protection, no-shell, and key-revocation flows pass CI. Keep the gateway experimental until deployment-specific host-key persistence and security review pass.
 
 ## Git Smart HTTP
 
@@ -182,7 +182,7 @@ To push, the session must have repository `write` or `admin` permission. A `read
 
 ## Not implemented yet
 
-Additional SSH interoperability testing and hardening, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and automated restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
+Additional SSH interoperability testing and hardening, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and separate-host restore/upgrade drills remain tracked work. Branch protection is enforced on both Smart HTTP and the restricted SSH receive-pack path. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
 
 ## Engineering rules
 

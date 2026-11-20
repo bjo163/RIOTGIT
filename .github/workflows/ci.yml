@@ -14,50 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dependency-lockfiles:
-    name: Generate dependency lockfiles
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: dtolnay/rust-toolchain@1.99
-      - run: cargo generate-lockfile
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - name: Record the exact npm version used for the lockfile
-        working-directory: apps/web
-        run: npm --version > .npm-version
-      - name: Generate npm lockfile
-        working-directory: apps/web
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Publish generated lockfiles for inspection
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-lockfiles
-          path: |
-            Cargo.lock
-            apps/web/package-lock.json
-            apps/web/.npm-version
-          if-no-files-found: error
-      - name: Commit lockfiles to the same-repository stabilization branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/stabilization-nov20'
-        env:
-          GITHUB_HEAD_REF: ${{ github.head_ref }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock apps/web/package-lock.json apps/web/.npm-version
-          if git diff --cached --quiet; then
-            echo "Dependency lockfiles are already up to date."
-            exit 0
-          fi
-          git commit -m "build(deps): commit reproducible dependency lockfiles"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
-
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
@@ -68,10 +24,10 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo check --workspace --all-targets
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - run: cargo build --workspace --all-targets
+      - run: cargo check --workspace --all-targets --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: cargo build --workspace --all-targets --locked
       - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh
       - name: Git smart HTTP round-trip
         run: bash scripts/smoke-git-http.sh
@@ -87,7 +43,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: npm install --no-audit --no-fund
+      - name: Verify pinned npm version
+        run: test "$(npm --version)" = "$(cat .npm-version)"
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
@@ -141,6 +99,47 @@ jobs:
           set -a
           . ./.env
           set +a
+          bash scripts/smoke-git-ssh.sh
+      - name: Verify single-node backup, restore, and SSH identity recovery
+        env:
+          RIOTGIT_BACKUP_DIR: ${{ runner.temp }}/riotgit-backups
+        run: |
+          set -Eeuo pipefail
+          set -a
+          . ./.env
+          set +a
+
+          mkdir -p "$RIOTGIT_BACKUP_DIR"
+          docker pull alpine:3.22
+
+          for attempt in $(seq 1 30); do
+            if ssh-keyscan -T 2 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-before"; then
+              if [[ -s "$RUNNER_TEMP/riotgit-ssh-hostkey-before" ]]; then break; fi
+            fi
+            sleep 1
+          done
+          test -s "$RUNNER_TEMP/riotgit-ssh-hostkey-before"
+
+          bash scripts/backup.sh
+          DATA_ARCHIVE="$(find "$RIOTGIT_BACKUP_DIR" -maxdepth 1 -type f -name 'riotgit-data-*.tar.gz' ! -name '*-ssh-hostkeys.tar.gz' -print | sort | tail -n 1)"
+          test -n "$DATA_ARCHIVE"
+          test -f "$DATA_ARCHIVE.sha256"
+
+          printf 'RESTORE\n' | bash scripts/restore.sh "$DATA_ARCHIVE"
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null \
+              && curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null
+
+          ssh-keyscan -T 5 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
+          diff -u "$RUNNER_TEMP/riotgit-ssh-hostkey-before" "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
+
           bash scripts/smoke-git-ssh.sh
       - name: Collect service logs on failure
         if: failure()

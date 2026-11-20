@@ -70,7 +70,7 @@ git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
 GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push --quiet origin main
 
 # A read-only account must clone successfully but must not receive-pack.
-READER_USERNAME="ci-reader"
+READER_USERNAME="ci-reader-${REPO_SUFFIX}"
 READER_PASSWORD="R!OTGIT-CI-Reader-Password-1234"
 READER_KEY="$TMP_DIR/ssh-reader"
 READER_KNOWN_HOSTS="$TMP_DIR/reader_known_hosts"

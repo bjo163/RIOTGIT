@@ -247,6 +247,12 @@ jobs:
           ssh-keyscan -T 5 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
           diff -u "$RUNNER_TEMP/riotgit-ssh-hostkey-before" "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
           bash scripts/smoke-git-ssh-restore.sh "$RUNNER_TEMP/riotgit-ssh-smoke-state"
+      - name: Verify restore into isolated Compose project
+        env:
+          RIOTGIT_BACKUP_DIR: ${{ runner.temp }}/riotgit-backups
+          RIOTGIT_SSH_SMOKE_STATE_FILE: ${{ runner.temp }}/riotgit-ssh-smoke-state
+          RIOTGIT_SSH_HOSTKEY_BEFORE: ${{ runner.temp }}/riotgit-ssh-hostkey-before
+        run: bash scripts/smoke-restore-isolated-project.sh
       - name: Collect service logs on failure
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh logs --tail=200 api ssh

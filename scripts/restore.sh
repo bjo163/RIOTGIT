@@ -116,7 +116,7 @@ log "Restore complete. Safety snapshots retained in $BACKUP_DIR."
  | head -n 1 || true)"
   [[ -n "$HOSTKEY_ENTRY" ]] || fail "SSH host-key archive does not contain ssh_host_ed25519_key.pub."
   EXPECTED_HOSTKEY_SHA="$(tar -xOzf "$SSH_ARCHIVE" "$HOSTKEY_ENTRY" | sha256sum | awk '{print $1}')"
-  ACTUAL_HOSTKEY_SHA="$(docker run --rm --network none -v "$SSH_HOSTKEYS_VOLUME:/data:ro" alpine:3.22 sh -ec 'sha256sum /data/ssh_host_ed25519_key.pub | awk "{print \\$1}"')"
+  ACTUAL_HOSTKEY_SHA="$(docker run --rm --network none -v "$SSH_HOSTKEYS_VOLUME:/data:ro" alpine:3.22 sh -ec 'sha256sum /data/ssh_host_ed25519_key.pub | cut -d " " -f1')"
   [[ "$EXPECTED_HOSTKEY_SHA" == "$ACTUAL_HOSTKEY_SHA" ]] || fail "Restored SSH host-key volume checksum does not match the archive (volume=$SSH_HOSTKEYS_VOLUME)."
   log "SSH host-key archive verified in volume $SSH_HOSTKEYS_VOLUME."
 fi

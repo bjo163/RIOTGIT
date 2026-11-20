@@ -20,6 +20,6 @@ Dependabot checks Cargo, npm, and GitHub Actions weekly. Patch/minor updates are
 
 ## Security and license inventory
 
-A parallel CI lane runs RustSec `cargo-audit` pinned to 0.23.0, `npm audit --audit-level=high`, and a machine-readable Cargo/npm license inventory. CI #265 passed both audits and published the JSON/TSV reports as a 30-day artifact.
+A parallel CI lane runs an isolated manifest/lockfile drift fixture for Cargo `--locked` and npm `ci`, RustSec `cargo-audit` pinned to 0.23.0, `npm audit --audit-level=high`, and a machine-readable Cargo/npm license inventory. CI #281 passed both drift checks and audits and published the JSON/TSV reports as a 30-day artifact.
 
 Fix advisories or record narrowly justified exceptions; do not hide findings by raising severity thresholds. The product repository is currently marked `UNLICENSED`; the inventory is evidence for a future license decision, not an assertion of redistribution approval. Review unknown license metadata and incompatible licenses before selecting a project license.

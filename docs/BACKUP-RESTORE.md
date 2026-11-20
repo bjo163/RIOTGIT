@@ -29,7 +29,7 @@ curl --fail http://127.0.0.1:8787/health/ready
 curl --fail http://127.0.0.1:8787/api/v1/meta
 ```
 
-Then sign in and test clone/fetch/push. If SSH is enabled, verify the server host-key fingerprint and test an SSH clone/push. The same-node Compose recovery path passed CI #265. A separate-host/off-host restore drill, upgrade/rollback, disk-full, interrupted-write, and corrupted-backup tests remain required before recovery can be called production-verified.
+Then sign in and test clone/fetch/push. If SSH is enabled, verify the server host-key fingerprint and test an SSH clone/push. CI #281 passed same-node restore and restore into a second Compose project with independent data and SSH host-key volumes; the drill validates checksums, service readiness, repository `git fsck`, existing-repository clone/fetch, and host-key continuity. A deliberately corrupted archive is rejected before service shutdown or volume mutation. This second project runs on the same CI host; a physical separate-host/off-host restore, upgrade/rollback, disk-full, and interrupted-write drills remain required before recovery can be called production-verified.
 
 ## Limits
 

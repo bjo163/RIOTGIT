@@ -28,7 +28,7 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Rust CLI for login, identity, repository list/create/clone, SSH-key management, and logout.
 - SSH public-key register/list/revoke API and per-username login failure throttling.
 - Same-origin guard for mutating Next.js web API routes.
-- Docker-volume backup/restore scripts with CI recovery verification: audit rows, bare-repository fsck, existing-repository SSH clone/fetch, commit marker, and host-key continuity; off-host restore remains required.
+- Docker-volume backup/restore scripts with CI recovery verification: checksum validation, corrupted-archive rejection, audit rows, bare-repository fsck, existing-repository SSH clone/fetch, commit marker, and host-key continuity in both the source Compose project and a second project with independent volumes; physical off-host restore remains required.
 
 See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) for the latest verified PR CI state and remaining production-readiness gates.
 
@@ -60,7 +60,7 @@ bash scripts/backup.sh
 bash scripts/restore.sh ./backups/riotgit-data-YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
-Scripts snapshot the complete single-node data volume and create a pre-restore safety archive. A separate-host restore drill is still required before calling recovery production-verified. See [Backup & Restore](docs/BACKUP-RESTORE.md).
+Scripts snapshot the complete single-node data volume and optional SSH host-key volume, verify checksum sidecars before destructive restore, and create a pre-restore safety archive. CI also restores into a second isolated Compose project using independent volumes on the same host. A physical separate-host restore drill is still required before calling recovery production-verified. See [Backup & Restore](docs/BACKUP-RESTORE.md).
 
 ## Product pillars
 

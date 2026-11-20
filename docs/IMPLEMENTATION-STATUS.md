@@ -7,14 +7,14 @@ Last updated: 2026-11-20
 The last known fully green main-branch baseline is commit `35d5c21e5feb188f5678ef77dc8e44c21083e003` (CI run #233):
 https://github.com/bjo163/RIOTGIT/actions/runs/43494098100
 
-The current main snapshot inspected on 2026-11-20 is commit `d9e6257d4072a7b23917a04068d207fea4042cb8` (CI run #243):
+The pre-merge main snapshot inspected on 2026-11-20 was commit `d9e6257d4072a7b23917a04068d207fea4042cb8` (CI run #243):
 https://github.com/bjo163/RIOTGIT/actions/runs/43497718230
 
 Run #243 is **red**: Web checks passed; Rust checks stopped at `cargo fmt --all -- --check` because two expressions in `apps/cli/src/main.rs` were not rustfmt-formatted; the OpenSSH smoke job failed its final revocation assertion. Code inspection found that the smoke script initially exported the administrator `GIT_SSH_COMMAND`, then reassigned that exported variable to the reader identity. Bash preserved the export attribute, so later administrator-only branch-protection and revocation assertions could run with the reader key. The stabilization branch keeps administrator and reader commands separate and explicitly selects the identity for each Git operation.
 
-PR CI [#266](https://github.com/bjo163/RIOTGIT/actions/runs/44656090684) on commit `ce4312f87ca717b60e1ce1df574b39b7aabc124f` passed all four independent jobs: Rust format/check/Clippy/tests/build and Smart HTTP; Web pinned npm verification, `npm ci`, typecheck, lint, and production build; RustSec/npm dependency audits plus license inventory artifact; and Docker/OpenSSH build, readiness, transport/security smoke, and same-node backup/restore. The temporary lockfile-refresh/self-commit job has been removed; CI now validates the committed lockfiles directly. The dependency graph uses SQLx 0.9.1 and `libsqlite3-sys` 0.40.0; `rsa` is absent from the active graph. Recovery verified audit rows, `git fsck` for restored bare repositories, clone/fetch of a pre-backup repository with a commit marker, and SSH host-key continuity. This is PR/branch evidence only; `main` remains at the older snapshot until PR #18 is merged.
+PR CI [#281](https://github.com/bjo163/RIOTGIT/actions/runs/44726605659) passed all four independent lanes on commit `806b205cf83c9042765b34057cfbfcaba705d2ca`: Rust format/check/Clippy/tests/build and Git Smart HTTP; pinned Node/npm with `npm ci`, Web typecheck/lint/production build; RustSec/npm audits, license inventory, and explicit Cargo/npm manifest-lockfile drift rejection; plus API/Web/SSH image build, readiness, SSH clone/fetch/push authorization and denial cases, and recovery verification. SSH public-key blob parsing now validates the supported Ed25519, ECDSA P-256, security-key, and RSA encodings; the forced-command parser has adversarial argument/path fixtures. Restore verifies archive checksums before modifying volumes, rejects a deliberately corrupted archive before service shutdown, and passes both same-node recovery and restoration into a second Compose project with independent data and SSH host-key volumes. The second Compose project is isolated on the same CI host; it is not a physical off-host disaster-recovery drill. This is PR-branch evidence; the base `main` snapshot above predates PR #18.
 
-This is CI evidence only; it is not a substitute for deployment-specific SSH host-key review, an off-host restore drill, upgrade/rollback validation, or a production security assessment. This document intentionally separates committed implementation from tested/production-ready capability.
+This is CI evidence only; it is not a substitute for deployment-specific SSH host-key/firewall review, a physical off-host restore drill, upgrade/rollback validation, or a production security assessment. This document intentionally separates committed implementation from tested/production-ready capability.
 
 ## Implemented and committed
 
@@ -34,7 +34,7 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 - [x] Read/write permissions applied to Git Smart HTTP.
 - [x] Per-username login failure throttle (10 failed attempts in 15 minutes).
 - [x] SSH public-key registration/list/revocation API with key type/blob validation and SHA-256 fingerprints.
-- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; PR CI #266 verifies clone/fetch/push, read-only denial, unknown/revoked-key denial, branch protection, no shell/forwarding, and SSH audit events.
+- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; PR CI #281 verifies clone/fetch/push, read-only denial, unknown/revoked-key denial, branch protection, shell/forwarding denial, supported SSH key-blob validation, adversarial command/path rejection, and SSH audit events.
 - [x] Same-origin guard for mutating Next.js web API routes.
 - [x] Emergency instance-admin token.
 
@@ -60,14 +60,14 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 ### Operations
 - [x] Rust and web Dockerfiles plus single-node Compose profile.
 - [x] Non-root runtime users, read-only container root filesystems, loopback host bindings, persistent data volume, and health checks.
-- [x] GitHub Actions Rust/Web, dependency security/license, Docker/OpenSSH, and same-node recovery checks are implemented. PR CI #266 passed all four jobs; this does not change `main` until PR #18 is merged.
+- [x] GitHub Actions Rust/Web, dependency security/license, Docker/OpenSSH, and same-node recovery checks are implemented. PR CI #281 passed all four jobs; this does not change `main` until PR #18 is merged.
 - [x] Backup and restore scripts for the complete single-node data volume.
 - [x] Backup/restore runbook with pre-restore safety snapshot and checksum instructions.
 
 ## Remaining work
 
 ### Git and security
-- [x] SSH read-only, unknown/revoked-key, shell/forwarding denial, branch protection, and audit-record checks pass in CI #266.
+- [x] SSH read-only, unknown/revoked-key, shell/forwarding denial, branch protection, and audit-record checks pass in CI #281.
 - [ ] Broader OpenSSH/Git interoperability and adversarial key-parser fixtures, plus deployment-specific host-key/firewall/security review.
 - [ ] Large-pack streaming/backpressure; Smart HTTP currently buffers bounded request/response bodies.
 - [ ] Git LFS.
@@ -89,23 +89,23 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 
 ### Production readiness
 - [x] Commit `Cargo.lock`, `apps/web/package-lock.json`, and pin Node/npm versions on the stabilization branch.
-- [x] Same-node Compose backup/restore passed in PR CI #266, including data and SSH host-key volumes, audit evidence, post-restore service health, `git fsck`, existing-repository clone/fetch and commit marker, and host-key continuity.
-- [ ] Separate-host/off-host restore, corrupted-backup/disk-full/interrupted-write tests, and upgrade/rollback validation.
+- [x] Same-node backup/restore and restore into a second, isolated Compose project passed PR CI #281. Both checks cover data and SSH host-key volumes, service health, restored bare-repository `git fsck`, existing-repository clone/fetch and commit marker, and host-key continuity.
+- [ ] Physical separate-host/off-host restore, disk-full/interrupted-write tests, and upgrade/rollback validation.
 - [ ] Validate upgrade/rollback against data snapshots.
 - [x] API and SSH container build/start/health/transport smoke test in CI.
-- [x] Build and start the web container in CI and wait for `/login` readiness (passed in PR CI #266).
+- [x] Build and start the web container in CI and wait for `/login` readiness (passed in PR CI #281).
 - [ ] Load, soak, disk-full, crash-recovery, and large-pack tests.
 - [ ] Full security review and release checklist.
 - [ ] Verify SSH host-key persistence and forwarding/firewall policy on the target deployment host; CI covers key revocation, no-shell, and hook enforcement.
 
 ## Important limitations
 
-- Git Smart HTTP and the optional SSH path passed PR CI #266, including separate admin/reader identities, unknown/revoked-key denial, forwarding restrictions, branch policy, and audit records. `main` has not received these changes until PR #18 is merged.
+- Git Smart HTTP and the optional SSH path passed PR CI #281, including separate admin/reader identities, unknown/revoked-key denial, forwarding restrictions, branch policy, adversarial SSH input, and audit records. The main-base snapshot at review start did not yet contain PR #18.
 - Branch protection is covered on both Smart HTTP and SSH receive-pack paths by the current CI smoke checks; broader shared-policy regression coverage is still required.
 - Login throttling is per normalized username, not IP-aware. It reduces repeated guessing but can be used to temporarily throttle a known username.
-- PR CI #266 covers locked Rust checks, npm ci/typecheck/lint/build, Rust/npm dependency audits, license inventory, Docker image build/start, Smart HTTP round-trip, SSH security tests, and same-node recovery with audit/fsck/clone-fetch/host-key checks.
+- PR CI #281 covers locked Rust checks, npm ci/typecheck/lint/build, Rust/npm dependency audits, license inventory, Docker image build/start, Smart HTTP round-trip, SSH security tests, and same-node recovery with audit/fsck/clone-fetch/host-key checks.
 - The CLI is an initial terminal interface, not a TUI or full feature-complete admin client.
-- Same-node data and SSH host-key recovery passed PR CI #266. A separate-host/off-host restore and upgrade/rollback drill have not yet been completed.
+- Same-node recovery and recovery into an isolated second Compose project passed PR CI #281. A physical separate-host/off-host restore and upgrade/rollback drill have not yet been completed.
 - R!OTGIT is not yet a fully hardened production Git forge. PostgreSQL parity, durable jobs/webhooks, isolated CI runners, P2P/federation, and AI agent execution remain unfinished.
 
 ## Local run
@@ -142,12 +142,12 @@ See [API README](../apps/api/README.md), [CLI guide](../apps/cli/README.md), [De
 | P0 #1 API contracts and boundaries | Foundation exists; not closed | API error conventions and architecture docs exist; typed config, request IDs, and complete module extraction still need verification. |
 | P0 #2 metadata/data access | SQLite foundation implemented; not closed | Versioned SQLite migrations exist; PostgreSQL adapter and cross-database tests are not implemented. |
 | P0 #3 repository lifecycle | Core path implemented; not closed | Native bare repo lifecycle exists; quota/size accounting, symlink adversarial tests, archive/delete/maintenance coverage remain. |
-| P0 #4 SSH transport | CI functional acceptance passed; deployment review open | CI #266 passed clone/fetch/push, read-only and unknown/revoked-key denial, branch rules, no-shell/forwarding denial, and audit records; deployment host-key/firewall review and adversarial fixtures remain. |
-| P0 #17 dependency locking | Locked and security-audited on PR branch | Cargo.lock/package-lock.json are committed; Cargo `--locked`, npm `ci`, Node 26.13.1/npm 11.20.0, weekly Dependabot, `cargo audit`, `npm audit`, and license inventory passed CI #266. An explicit manifest-drift negative fixture and human license review remain. |
+| P0 #4 SSH transport | CI functional acceptance passed; deployment review open | CI #281 passed clone/fetch/push, read-only and unknown/revoked-key denial, branch rules, shell/forwarding denial, supported key-blob validation, adversarial command/path fixtures, and audit records; deployment host-key/firewall review and broader interoperability remain. |
+| P0 #17 dependency locking | Locked and security-audited on PR branch | Cargo.lock/package-lock.json are committed; Cargo `--locked`, npm `ci`, Node 26.13.1/npm 11.20.0, weekly Dependabot, explicit Cargo/npm manifest-drift rejection, `cargo audit`, `npm audit`, and license inventory passed CI #281. Human review of unknown/incompatible license metadata remains. |
 | P1 #5–#10 forge and identity | Partially implemented | HTTP, browser, collaboration, branch protection, issues, and SSH key registry exist; large-pack streaming, org/team RBAC, inline review, richer timeline, UI completeness, and E2E coverage remain. |
-| P1 #16 operations | Same-node recovery passed; off-host drills open | CI #266 passed API/Web/SSH build/start, audit inspection, data + host-key restore, health checks, `git fsck`, existing repository clone/fetch, commit marker, and host-key continuity. Separate-host restore, upgrade/rollback, and storage-failure drills remain. |
+| P1 #16 operations | Same-node and isolated Compose-project recovery passed; physical off-host drills open | CI #281 passed API/Web/SSH build/start, archive checksum validation, corrupted-archive rejection, audit inspection, data + host-key restore into the source and a second Compose project's independent volumes, health checks, `git fsck`, existing repository clone/fetch, commit marker, and host-key continuity. Physical separate-host restore, upgrade/rollback, and storage-failure drills remain. |
 | P2 #11 CLI | Initial implementation exists | Core login/repository/SSH-key commands exist; profiles, OS credential vault, JSON output, status, and dedicated CLI integration tests remain. |
 | P2 #12 jobs/webhooks | Not implemented | No durable outbox/worker or signed webhook delivery; SSRF-safe delivery must be designed before enabling outbound requests. |
 | P2 #13 CI runner | Not implemented | No isolated workflow runner; must remain a separate execution boundary from the API. |
 
-P2 is **not complete**. `main` remains at the older CI snapshot until PR #18 is merged. The stabilization branch passed all four CI lanes in #266, including SQLx/SQLite advisory remediation, dependency audits, and the full single-node recovery smoke. Separate-host recovery, upgrade/rollback, deployment security review, and the remaining P0–P3 roadmap items remain open. Do not close issues until every acceptance criterion and verification gate passes.
+P2 is **not complete**. The main-base snapshot recorded at review start predates PR #18. The stabilization branch passed all four CI lanes in #281, including SQLx/SQLite advisory remediation, dependency audits, adversarial SSH tests, and recovery into both the source and an isolated Compose project. Physical off-host recovery, upgrade/rollback, deployment security review, and the remaining P0–P3 roadmap items remain open. Do not close issues until every acceptance criterion and verification gate passes.

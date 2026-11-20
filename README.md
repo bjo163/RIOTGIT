@@ -21,23 +21,23 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Repository tree/blob browsing, commit history, and bounded base/head diff view.
 - Issues, comments, labels, and milestones in the repository workspace.
 - Pull request create/review/merge workflow with protected-branch approval checks.
-- Server-side branch protection for Git Smart HTTP receive-pack, with a settings UI.
+- Server-side branch protection for Git Smart HTTP and restricted OpenSSH receive-pack, with a settings UI.
 - Authenticated Git Smart HTTP clone/fetch/push via native `git http-backend`.
 - Next.js login/logout, HttpOnly session cookie, live repository dashboard, and repository creation.
 - Docker Compose single-node profile and GitHub Actions checks.
 - Rust CLI for login, identity, repository list/create/clone, SSH-key management, and logout.
 - SSH public-key register/list/revoke API and per-username login failure throttling.
 - Same-origin guard for mutating Next.js web API routes.
-- Docker-volume backup/restore scripts and recovery runbook (restore drill still required).
+- Docker-volume backup/restore scripts with CI recovery verification: checksum validation, corrupted-archive rejection, audit rows, bare-repository fsck, existing-repository SSH clone/fetch, commit marker, and host-key continuity in both the source Compose project and a second project with independent volumes; physical off-host restore remains required.
 
-See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the latest successful CI run](https://github.com/bjo163/RIOTGIT/actions/runs/43494098100).
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) for the latest verified PR CI state and remaining production-readiness gates.
 
 ## Terminal CLI
 
 Build:
 
 ```bash
-cargo build --release -p riotgit
+cargo build --locked --release -p riotgit
 ```
 
 Sign in and use common repository workflows:
@@ -60,7 +60,7 @@ bash scripts/backup.sh
 bash scripts/restore.sh ./backups/riotgit-data-YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
-Scripts snapshot the complete single-node data volume and create a pre-restore safety archive. A separate-host restore drill is still required before calling recovery production-verified. See [Backup & Restore](docs/BACKUP-RESTORE.md).
+Scripts snapshot the complete single-node data volume and optional SSH host-key volume, verify checksum sidecars before destructive restore, and create a pre-restore safety archive. CI also restores into a second isolated Compose project using independent volumes on the same host. A physical separate-host restore drill is still required before calling recovery production-verified. See [Backup & Restore](docs/BACKUP-RESTORE.md).
 
 ## Product pillars
 
@@ -111,7 +111,7 @@ Start the API:
 set -a
 . ./.env
 set +a
-cargo run -p riotgit-api
+cargo run --locked -p riotgit-api
 ```
 
 Default API: `http://127.0.0.1:8787`.
@@ -123,7 +123,7 @@ In another terminal:
 ```bash
 cd apps/web
 cp .env.example .env.local
-npm install
+npm ci
 npm run dev
 ```
 
@@ -153,7 +153,7 @@ It listens on port 2222 by default (loopback-bound). Configure firewall/port exp
 git clone ssh://git@your-host.example:2222/your-user/your-repo.git
 ```
 
-The SSH account is always `git`; the registered key identifies the application user. Interactive shell and forwarding are disabled. See [SSH gateway guide](apps/ssh/README.md). This gateway is experimental until the SSH CI integration and deployment-specific host-key/security checks pass.
+The SSH account is always `git`; the registered key identifies the application user. Interactive shell and forwarding are disabled. See [SSH gateway guide](apps/ssh/README.md). The SSH clone/push, read-only denial, branch protection, no-shell, and key-revocation flows pass CI. Keep the gateway experimental until deployment-specific host-key persistence and security review pass.
 
 ## Git Smart HTTP
 
@@ -176,13 +176,14 @@ To push, the session must have repository `write` or `admin` permission. A `read
 - [Security baseline](docs/SECURITY.md)
 - [Delivery roadmap](docs/ROADMAP.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
+- [Dependency policy and audit](docs/DEPENDENCIES.md)
 - [API guide](apps/api/README.md)
 - [Deployment guide](docs/DEPLOYMENT.md)
 - [Contribution standards](CONTRIBUTING.md)
 
 ## Not implemented yet
 
-Additional SSH interoperability testing and hardening, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and automated restore drills remain tracked work. Branch protection currently applies to Git Smart HTTP only. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
+Additional SSH interoperability testing and hardening, durable jobs/webhooks, isolated CI runners, mirrors/federation/P2P, AI agent execution, PostgreSQL parity, large-pack streaming/LFS, organization/team RBAC, advanced PR review checks, and separate-host restore/upgrade drills remain tracked work. Branch protection is enforced on both Smart HTTP and the restricted SSH receive-pack path. The CLI is an initial terminal client, not a TUI or full admin client. Do not treat R!OTGIT as a fully production-hardened forge until the remaining security, scale, and recovery gates pass.
 
 ## Engineering rules
 

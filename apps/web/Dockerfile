@@ -1,16 +1,16 @@
-FROM node:26-bookworm-slim AS dependencies
+FROM node:26.13.1-bookworm-slim AS dependencies
 WORKDIR /app
-COPY apps/web/package.json ./package.json
-RUN npm install --no-audit --no-fund
+COPY apps/web/package.json apps/web/package-lock.json apps/web/.npm-version ./
+RUN test "$(npm --version)" = "$(cat .npm-version)" && npm ci --no-audit --no-fund
 
-FROM node:26-bookworm-slim AS builder
+FROM node:26.13.1-bookworm-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY apps/web/ ./
 RUN npm run build
 
-FROM node:26-bookworm-slim AS runtime
+FROM node:26.13.1-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

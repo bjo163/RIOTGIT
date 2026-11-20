@@ -15,7 +15,7 @@ From the repository root:
 cp .env.example .env
 # Set RIOTGIT_API_TOKEN, RIOTGIT_ADMIN_USERNAME, and RIOTGIT_ADMIN_PASSWORD.
 set -a && . ./.env && set +a
-cargo run -p riotgit-api
+cargo run --locked -p riotgit-api
 ```
 
 PowerShell:
@@ -25,7 +25,7 @@ Copy-Item .env.example .env
 $env:RIOTGIT_API_TOKEN = "replace-with-a-long-random-secret"
 $env:RIOTGIT_ADMIN_USERNAME = "admin"
 $env:RIOTGIT_ADMIN_PASSWORD = "replace-with-a-unique-password-of-12-plus-characters"
-cargo run -p riotgit-api
+cargo run --locked -p riotgit-api
 ```
 
 The API listens on `127.0.0.1:8787` by default.
@@ -55,7 +55,7 @@ The API listens on `127.0.0.1:8787` by default.
 - `POST /api/v1/repositories/{owner}/{name}/branch-protection` — create or update a rule (repository admin).
 - `DELETE /api/v1/repositories/{owner}/{name}/branch-protection?branch_name=main` — remove a rule (repository admin).
 
-Branch protection is currently enforced on Git Smart HTTP receive-pack. SSH transport is not implemented yet.
+Branch protection is enforced on Git Smart HTTP and on the restricted OpenSSH receive-pack hook. The OpenSSH gateway uses database-backed authorized keys and a forced command; interactive shell and forwarding are disabled.
 
 Pull request routes:
 - `GET /api/v1/repositories/{owner}/{name}/pulls` — list pull requests.
@@ -124,16 +124,16 @@ git -c http.extraHeader="Authorization: Bearer $RIOTGIT_TOKEN" clone \
 
 The transport delegates to native `git http-backend`. Request body size is capped at 64 MiB and backend execution at 120 seconds. The CI smoke test covers administrator bootstrap, builder/reader sessions, read-only clone, push denial, grant revocation, and session logout.
 
-SSH key registration/revocation and per-username login throttling are implemented. An OpenSSH forced-command transport/daemon is still not implemented; registering a key does not yet enable SSH clone or push. Large-pack streaming and Git LFS are also not implemented.
+SSH key registration/revocation, the restricted OpenSSH forced-command gateway, receive-pack branch protection, and per-username login throttling are implemented. SSH remains an optional deployment profile and is still subject to deployment-specific host-key review. Large-pack streaming and Git LFS are not implemented.
 
 ## Tests
 
 ```bash
 cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build -p riotgit-api
+cargo check --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo build --locked -p riotgit-api
 bash scripts/smoke-git-http.sh
 ```
 

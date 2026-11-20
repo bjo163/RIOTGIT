@@ -14,21 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo check --workspace --all-targets
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - run: cargo build --workspace --all-targets
-      - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh
+      - run: cargo check --workspace --all-targets --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: cargo build --workspace --all-targets --locked
+      - run: bash -n scripts/backup.sh scripts/restore.sh scripts/smoke-git-http.sh scripts/smoke-git-ssh.sh scripts/smoke-git-ssh-restore.sh
       - name: Git smart HTTP round-trip
         run: bash scripts/smoke-git-http.sh
 
@@ -43,10 +44,73 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: npm install --no-audit --no-fund
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Verify pinned npm version
+        run: test "$(npm --version)" = "$(cat .npm-version)"
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+  dependency-security:
+    name: Dependency security and license inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Verify pinned npm version
+        working-directory: apps/web
+        run: test "$(npm --version)" = "$(cat .npm-version)"
+      - name: Install web dependencies from lockfile
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+      - name: Verify locked installs reject manifest drift
+        run: node scripts/check-lockfile-drift.mjs
+      - name: Install pinned RustSec cargo-audit
+        run: cargo install cargo-audit --version 0.23.0 --locked
+      - name: Audit Rust dependencies
+        id: rust-audit
+        continue-on-error: true
+        run: cargo audit --json > "$RUNNER_TEMP/cargo-audit.json"
+      - name: Audit npm dependencies
+        id: npm-audit
+        continue-on-error: true
+        working-directory: apps/web
+        run: npm audit --audit-level=high --json > "$RUNNER_TEMP/npm-audit.json"
+      - name: Generate Rust and npm license inventory
+        run: node scripts/dependency-license-inventory.mjs "$RUNNER_TEMP/dependency-license-inventory.tsv"
+      - name: Upload dependency security and license reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-security-reports
+          path: |
+            ${{ runner.temp }}/cargo-audit.json
+            ${{ runner.temp }}/npm-audit.json
+            ${{ runner.temp }}/dependency-license-inventory.tsv
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Enforce dependency audit results
+        if: always()
+        env:
+          RUST_AUDIT_OUTCOME: ${{ steps.rust-audit.outcome }}
+          NPM_AUDIT_OUTCOME: ${{ steps.npm-audit.outcome }}
+        run: |
+          test "$RUST_AUDIT_OUTCOME" = "success" || {
+            echo "Rust dependency audit did not pass."
+            exit 1
+          }
+          test "$NPM_AUDIT_OUTCOME" = "success" || {
+            echo "npm dependency audit did not pass."
+            exit 1
+          }
 
   ssh:
     name: OpenSSH Git transport
@@ -64,10 +128,10 @@ jobs:
             echo "RIOTGIT_WEB_PORT=3000"
             echo "RIOTGIT_SSH_PORT=2222"
           } > .env
-      - name: Build API and SSH images
-        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh build api ssh
-      - name: Start API service
-        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --no-build api
+      - name: Build API, web, and SSH images
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh build api web ssh
+      - name: Start API and web services
+        run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build api web
       - name: Wait for API readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -79,14 +143,116 @@ jobs:
           done
           docker compose -f deploy/compose/docker-compose.yml --env-file .env logs --tail=160 api
           exit 1
+      - name: Wait for web readiness
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/login >/dev/null; then
+              echo "Web application is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env logs --tail=160 web
+          exit 1
       - name: Start restricted SSH gateway
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh up -d --no-build ssh
       - name: Verify SSH clone, push, permissions, and revocation
+        env:
+          RIOTGIT_SSH_SMOKE_STATE_FILE: ${{ runner.temp }}/riotgit-ssh-smoke-state
         run: |
           set -a
           . ./.env
           set +a
           bash scripts/smoke-git-ssh.sh
+      - name: Verify single-node backup, restore, and SSH identity recovery
+        env:
+          RIOTGIT_BACKUP_DIR: ${{ runner.temp }}/riotgit-backups
+        run: |
+          set -Eeuo pipefail
+          set -a
+          . ./.env
+          set +a
+
+          mkdir -p "$RIOTGIT_BACKUP_DIR"
+          docker pull alpine:3.22
+
+          for attempt in $(seq 1 30); do
+            if ssh-keyscan -T 2 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-before"; then
+              if [[ -s "$RUNNER_TEMP/riotgit-ssh-hostkey-before" ]]; then break; fi
+            fi
+            sleep 1
+          done
+          test -s "$RUNNER_TEMP/riotgit-ssh-hostkey-before"
+
+          bash scripts/backup.sh
+          DATA_ARCHIVE="$(find "$RIOTGIT_BACKUP_DIR" -maxdepth 1 -type f -name 'riotgit-data-*.tar.gz' ! -name '*-ssh-hostkeys.tar.gz' -print | sort | tail -n 1)"
+          test -n "$DATA_ARCHIVE"
+          test -f "$DATA_ARCHIVE.sha256"
+
+          CORRUPT_ARCHIVE="${DATA_ARCHIVE%.tar.gz}-corrupt.tar.gz"
+          cp "$DATA_ARCHIVE" "$CORRUPT_ARCHIVE"
+          printf '\ncorruption' >> "$CORRUPT_ARCHIVE"
+          cp "$DATA_ARCHIVE.sha256" "$CORRUPT_ARCHIVE.sha256"
+          if printf 'RESTORE\n' | bash scripts/restore.sh "$CORRUPT_ARCHIVE" > "$RUNNER_TEMP/restore-checksum-preflight.log" 2>&1; then
+            echo "Corrupted restore archive was unexpectedly accepted." >&2
+            exit 1
+          fi
+          grep -Fq "Archive checksum mismatch" "$RUNNER_TEMP/restore-checksum-preflight.log" || {
+            cat "$RUNNER_TEMP/restore-checksum-preflight.log" >&2
+            echo "Restore rejected the corrupted archive for an unexpected reason." >&2
+            exit 1
+          }
+          rm -f "$CORRUPT_ARCHIVE" "$CORRUPT_ARCHIVE.sha256"
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null
+
+          printf 'RESTORE\n' | bash scripts/restore.sh "$DATA_ARCHIVE"
+
+          API_CONTAINER="$(docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh ps -q api)"
+          DATA_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/riotgit"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$API_CONTAINER")"
+          test -n "$DATA_VOLUME"
+
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh stop api web ssh
+          docker run --rm -v "$DATA_VOLUME:/data:ro" alpine:3.22 sh -s <<'AUDIT'
+          set -eu
+          apk add --no-cache sqlite >/dev/null
+          successes="$(sqlite3 /data/riotgit.db "SELECT COUNT(*) FROM audit_events WHERE action = 'git.ssh.success' AND actor_user_id IS NOT NULL AND resource_type = 'repository' AND resource_id IS NOT NULL AND json_extract(metadata_json, '$.transport') = 'ssh' AND json_extract(metadata_json, '$.operation') IN ('git-upload-pack', 'git-receive-pack')")"
+          denials="$(sqlite3 /data/riotgit.db "SELECT COUNT(*) FROM audit_events WHERE action = 'git.ssh.branch_policy_denied' AND actor_user_id IS NOT NULL AND resource_type = 'repository' AND resource_id IS NOT NULL AND json_extract(metadata_json, '$.transport') = 'ssh'")"
+          test "$successes" -ge 2
+          test "$denials" -ge 1
+          echo "SSH audit evidence: successes=$successes policy-denials=$denials"
+          AUDIT
+
+          docker run --rm --network none -v "$DATA_VOLUME:/var/lib/riotgit:ro" --entrypoint sh riotgit/api:local -ec '
+            count=0
+            for repository in /var/lib/riotgit/repositories/*.git; do
+              [ -d "$repository" ] || continue
+              git --git-dir="$repository" fsck --full
+              count=$((count + 1))
+            done
+            test "$count" -gt 0
+            echo "git fsck passed for $count restored repositories."
+          '
+
+          docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh start api web ssh
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null \
+              && curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_API_PORT/health/ready" >/dev/null
+          curl --fail --silent "http://127.0.0.1:$RIOTGIT_WEB_PORT/login" >/dev/null
+          ssh-keyscan -T 5 -t ed25519 -p "$RIOTGIT_SSH_PORT" 127.0.0.1 2>/dev/null | sort > "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
+          diff -u "$RUNNER_TEMP/riotgit-ssh-hostkey-before" "$RUNNER_TEMP/riotgit-ssh-hostkey-after"
+          bash scripts/smoke-git-ssh-restore.sh "$RUNNER_TEMP/riotgit-ssh-smoke-state"
+      - name: Verify restore into isolated Compose project
+        env:
+          RIOTGIT_BACKUP_DIR: ${{ runner.temp }}/riotgit-backups
+          RIOTGIT_SSH_SMOKE_STATE_FILE: ${{ runner.temp }}/riotgit-ssh-smoke-state
+          RIOTGIT_SSH_HOSTKEY_BEFORE: ${{ runner.temp }}/riotgit-ssh-hostkey-before
+        run: bash scripts/smoke-restore-isolated-project.sh
       - name: Collect service logs on failure
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile ssh logs --tail=200 api ssh

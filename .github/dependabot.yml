@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+    groups:
+      rust-patch-minor:
+        update-types: [patch, minor]
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:15"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    labels: [dependencies, web]
+    groups:
+      npm-patch-minor:
+        update-types: [patch, minor]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:30"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    groups:
+      github-actions-patch-minor:
+        update-types: [patch, minor]

@@ -9,7 +9,9 @@ ADMIN_USERNAME="${RIOTGIT_ADMIN_USERNAME:?Set RIOTGIT_ADMIN_USERNAME in .env}"
 ADMIN_PASSWORD="${RIOTGIT_ADMIN_PASSWORD:?Set RIOTGIT_ADMIN_PASSWORD in .env}"
 KNOWN_HOSTS="$TMP_DIR/known_hosts"
 KEY_FILE="$TMP_DIR/ssh-smoke"
-REPO_NAME="ssh-smoke-$(date -u +%H%M%S)"
+REPO_SUFFIX="${TMP_DIR##*/}"
+REPO_SUFFIX="${REPO_SUFFIX//[^[:alnum:]]/}"
+REPO_NAME="ssh-smoke-${REPO_SUFFIX}"
 
 cleanup() {
   status=$?
@@ -54,21 +56,36 @@ for _ in $(seq 1 40); do
 done
 [[ "$READY" -eq 1 ]] || { echo "SSH gateway did not become ready on port $SSH_PORT" >&2; exit 1; }
 
-export GIT_SSH_COMMAND="ssh -i $KEY_FILE -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes"
+ADMIN_GIT_SSH_COMMAND="ssh -i $KEY_FILE -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
 CLONE_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
 CLONE_DIR="$TMP_DIR/clone"
 
-git clone --quiet "$CLONE_URL" "$CLONE_DIR"
+GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git clone --quiet "$CLONE_URL" "$CLONE_DIR"
 git -C "$CLONE_DIR" config user.name "R!OTGIT SSH CI"
 git -C "$CLONE_DIR" config user.email "riotgit-ssh-ci@example.invalid"
 printf 'SSH transport round-trip passed\n' >"$CLONE_DIR/README.md"
 git -C "$CLONE_DIR" branch -M main
 git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: verify SSH clone and push" >/dev/null
-git -C "$CLONE_DIR" push --quiet origin main
+GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push --quiet origin main
+
+if [[ -n "${RIOTGIT_SSH_SMOKE_STATE_FILE:-}" ]]; then
+  mkdir -p "$(dirname "$RIOTGIT_SSH_SMOKE_STATE_FILE")"
+  printf '%s/%s\n' "$ADMIN_USERNAME" "$REPO_NAME" > "$RIOTGIT_SSH_SMOKE_STATE_FILE"
+  chmod 600 "$RIOTGIT_SSH_SMOKE_STATE_FILE"
+fi
+
+# An unregistered SSH key must not access a private repository.
+UNKNOWN_KEY="$TMP_DIR/ssh-unknown"
+ssh-keygen -q -t ed25519 -N "" -f "$UNKNOWN_KEY"
+UNKNOWN_GIT_SSH_COMMAND="ssh -i $UNKNOWN_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
+if GIT_SSH_COMMAND="$UNKNOWN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
+  echo "ERROR: an unregistered SSH key accessed a private repository." >&2
+  exit 1
+fi
 
 # A read-only account must clone successfully but must not receive-pack.
-READER_USERNAME="ci-reader"
+READER_USERNAME="ci-reader-${REPO_SUFFIX}"
 READER_PASSWORD="R!OTGIT-CI-Reader-Password-1234"
 READER_KEY="$TMP_DIR/ssh-reader"
 READER_KNOWN_HOSTS="$TMP_DIR/reader_known_hosts"
@@ -92,16 +109,16 @@ curl --fail --silent --show-error -X PUT "$API_BASE/api/v1/repositories/$ADMIN_U
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"permission":"read"}' >/dev/null
 
-GIT_SSH_COMMAND="ssh -i $READER_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$READER_KNOWN_HOSTS -o BatchMode=yes"
+READER_GIT_SSH_COMMAND="ssh -i $READER_KEY -p $SSH_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$READER_KNOWN_HOSTS -o BatchMode=yes -o ControlMaster=no -o ControlPath=none"
 ssh-keyscan -T 5 -t ed25519 -p "$SSH_PORT" 127.0.0.1 2>/dev/null >"$READER_KNOWN_HOSTS"
 READER_URL="ssh://git@127.0.0.1:$SSH_PORT/$ADMIN_USERNAME/$REPO_NAME.git"
-GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
+GIT_SSH_COMMAND="$READER_GIT_SSH_COMMAND" git clone --quiet "$READER_URL" "$READER_CLONE"
 git -C "$READER_CLONE" config user.name "R!OTGIT SSH Read-Only CI"
 git -C "$READER_CLONE" config user.email "riotgit-ssh-readonly-ci@example.invalid"
 printf 'Read-only account must not push this change\n' >>"$READER_CLONE/README.md"
 git -C "$READER_CLONE" add README.md
 git -C "$READER_CLONE" commit -m "test: read-only SSH push must fail" >/dev/null
-if GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$READER_GIT_SSH_COMMAND" git -C "$READER_CLONE" push origin main >/dev/null 2>&1; then
   echo "ERROR: SSH read-only account was able to push." >&2
   exit 1
 fi
@@ -113,7 +130,7 @@ curl --fail --silent --show-error -X POST "$API_BASE/api/v1/repositories/$ADMIN_
 printf 'This protected direct push must be denied\n' >>"$CLONE_DIR/README.md"
 git -C "$CLONE_DIR" add README.md
 git -C "$CLONE_DIR" commit -m "test: protected SSH direct push must fail" >/dev/null
-if git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" push origin main >/dev/null 2>&1; then
   echo "ERROR: SSH direct push bypassed branch protection." >&2
   exit 1
 fi
@@ -121,8 +138,15 @@ fi
 # No interactive shell may be obtained through the Git account.
 if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" \
-  -o BatchMode=yes git@127.0.0.1 true >/dev/null 2>&1; then
+  -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \
+  git@127.0.0.1 true >/dev/null 2>&1; then
   echo "ERROR: restricted Git account accepted an interactive command." >&2
+  exit 1
+fi
+
+# Git-only keys must not be granted OpenSSH stdio/TCP forwarding.
+if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" -o BatchMode=yes -o ControlMaster=no -o ControlPath=none -W 127.0.0.1:22 git@127.0.0.1 </dev/null >/dev/null 2>&1; then
+  echo "ERROR: Git-only SSH key retained TCP forwarding capability." >&2
   exit 1
 fi
 
@@ -133,7 +157,7 @@ if curl --fail --silent --show-error "$API_BASE/api/v1/user/ssh-keys" \
   echo "ERROR: API still lists the revoked SSH key." >&2
   exit 1
 fi
-if git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="$ADMIN_GIT_SSH_COMMAND" git -C "$CLONE_DIR" ls-remote origin >/dev/null 2>&1; then
   echo "ERROR: revoked SSH key still authenticated." >&2
   exit 1
 fi

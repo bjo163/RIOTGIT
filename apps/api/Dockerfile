@@ -2,6 +2,7 @@ FROM rust:1.99-bookworm AS builder
 
 WORKDIR /src
 COPY Cargo.toml Cargo.toml
+COPY Cargo.lock Cargo.lock
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 COPY apps/cli/Cargo.toml apps/cli/Cargo.toml
 COPY apps/cli/src apps/cli/src
@@ -10,7 +11,7 @@ COPY apps/api/src apps/api/src
 
 # Build the API and all restricted SSH helper binaries in one shared layer.
 # The API and SSH runtime targets reuse this exact artifact stage.
-RUN cargo build --release -p riotgit-api --bins
+RUN cargo build --locked --release -p riotgit-api --bins
 
 FROM debian:bookworm-slim AS runtime-base
 

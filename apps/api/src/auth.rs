@@ -9,10 +9,6 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
 };
-use base64::{
-    Engine as _,
-    engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
-};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -220,15 +216,15 @@ pub(crate) async fn actor_from_token(token: &str, state: &AppState) -> Option<Ac
     }
 
     let actual: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-    if let Some(expected) = state.api_token_digest {
-        if bool::from(expected.ct_eq(&actual)) {
-            return Some(Actor {
-                user_id: "system".to_owned(),
-                username: "system".to_owned(),
-                role: "admin".to_owned(),
-                session_id: None,
-            });
-        }
+    if let Some(expected) = state.api_token_digest
+        && bool::from(expected.ct_eq(&actual))
+    {
+        return Some(Actor {
+            user_id: "system".to_owned(),
+            username: "system".to_owned(),
+            role: "admin".to_owned(),
+            session_id: None,
+        });
     }
 
     let digest = hex::encode(actual);
@@ -636,24 +632,7 @@ fn parse_ssh_public_key(value: &str) -> Result<(String, String, String), &'stati
         );
     }
 
-    let blob = STANDARD
-        .decode(encoded)
-        .map_err(|_| "Public key data is not valid base64.")?;
-    if blob.len() < 8 {
-        return Err("Public key data is too short.");
-    }
-    let key_type_length = u32::from_be_bytes(
-        blob[0..4]
-            .try_into()
-            .map_err(|_| "Public key data is malformed.")?,
-    ) as usize;
-    if key_type_length != key_type.len()
-        || blob.get(4..4 + key_type_length) != Some(key_type.as_bytes())
-    {
-        return Err("Public key type does not match its encoded key data.");
-    }
-
-    let fingerprint = format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(&blob)));
+    let fingerprint = crate::ssh_public_key::fingerprint(key_type, encoded)?;
     Ok((key_type.to_owned(), encoded.to_owned(), fingerprint))
 }
 

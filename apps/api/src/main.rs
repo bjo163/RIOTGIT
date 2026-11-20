@@ -24,6 +24,7 @@ mod collaboration;
 mod git_browser;
 mod git_http;
 mod pull_requests;
+mod ssh_public_key;
 
 #[derive(Clone)]
 pub(crate) struct AppState {

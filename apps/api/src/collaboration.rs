@@ -211,10 +211,10 @@ pub(crate) async fn create_issue(
             "Issue title must contain 1-200 bytes.",
         ));
     }
-    if let Some(body) = input.body.as_deref() {
-        if !body.is_empty() {
-            validate_body(body)?;
-        }
+    if let Some(body) = input.body.as_deref()
+        && !body.is_empty()
+    {
+        validate_body(body)?;
     }
 
     let issue = sqlx::query_as::<_, Issue>(
@@ -273,17 +273,17 @@ pub(crate) async fn update_issue(
         ));
     }
 
-    if let Some(title) = input.title.as_deref() {
-        if title.trim().is_empty() || title.trim().len() > 200 {
-            return Err(ApiError::bad_request(
-                "Issue title must contain 1-200 bytes.",
-            ));
-        }
+    if let Some(title) = input.title.as_deref()
+        && (title.trim().is_empty() || title.trim().len() > 200)
+    {
+        return Err(ApiError::bad_request(
+            "Issue title must contain 1-200 bytes.",
+        ));
     }
-    if let Some(body) = input.body.as_deref() {
-        if !body.is_empty() {
-            validate_body(body)?;
-        }
+    if let Some(body) = input.body.as_deref()
+        && !body.is_empty()
+    {
+        validate_body(body)?;
     }
     let next_state = match input.state.as_deref() {
         None => None,

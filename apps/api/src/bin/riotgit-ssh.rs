@@ -153,10 +153,11 @@ async fn run() -> Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    if let Ok(protocol) = env::var("GIT_PROTOCOL") {
-        if protocol.len() <= 64 && protocol.bytes().all(|byte| byte.is_ascii_graphic()) {
-            command.env("GIT_PROTOCOL", protocol);
-        }
+    if let Ok(protocol) = env::var("GIT_PROTOCOL")
+        && protocol.len() <= 64
+        && protocol.bytes().all(|byte| byte.is_ascii_graphic())
+    {
+        command.env("GIT_PROTOCOL", protocol);
     }
 
     let status = command
@@ -211,11 +212,40 @@ mod tests {
     }
 
     #[test]
-    fn rejects_shells_commands_and_path_traversal() {
-        assert!(parse_original_command("bash").is_err());
-        assert!(parse_original_command("git-upload-pack '../outside.git'").is_err());
-        assert!(parse_original_command("git-upload-pack '/../../outside.git'").is_err());
-        assert!(parse_original_command("git-upload-pack '//builder/project.git'").is_err());
-        assert!(parse_original_command("git-upload-pack 'builder/project.git;id'").is_err());
+    fn rejects_shells_commands_and_adversarial_repository_paths() {
+        let invalid_commands = [
+            "",
+            "bash",
+            "git-upload-archive 'builder/project.git'",
+            "git-upload-pack",
+            "git-upload-pack 'builder/project.git' --strict",
+            "git-upload-pack '../outside.git'",
+            "git-upload-pack '/../../outside.git'",
+            "git-upload-pack '//builder/project.git'",
+            "git-upload-pack 'builder//project.git'",
+            "git-upload-pack 'builder/project.git/extra'",
+            "git-upload-pack 'builder/project.git;id'",
+            "git-upload-pack 'builder/project.git' && id",
+            "git-upload-pack 'builder/project.git$(id)'",
+            "git-upload-pack 'builder/project.git|id'",
+            "git-upload-pack 'builder/project.git& id'",
+            "git-upload-pack 'builder/project.git\\outside'",
+            "git-upload-pack '~/.ssh/project.git'",
+            "git-upload-pack '/etc/passwd'",
+            "git-upload-pack '.hidden/project.git'",
+            "git-upload-pack 'builder/.git'",
+            "git-upload-pack 'builder/project.git\ncommand'",
+            "git-upload-pack 'builder/project.git\0'",
+        ];
+
+        for command in invalid_commands {
+            assert!(
+                parse_original_command(command).is_err(),
+                "unexpectedly accepted command: {command:?}"
+            );
+        }
+        assert!(
+            parse_original_command(&format!("git-upload-pack '{}.git'", "a".repeat(1100))).is_err()
+        );
     }
 }

@@ -14,6 +14,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  dependency-lock-refresh:
+    name: Refresh SQLx and SQLite lockfile
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - name: Upgrade SQLx and patched SQLite binding
+        run: |
+          cargo update -p sqlx --precise 0.9.1
+          cargo update -p libsqlite3-sys --precise 0.40.0
+      - name: Validate resolved driver versions and active dependency graph
+        run: |
+          grep -A2 '^name = "sqlx"$' Cargo.lock | grep -F 'version = "0.9.1"'
+          grep -A2 '^name = "libsqlite3-sys"$' Cargo.lock | grep -F 'version = "0.40.0"'
+          cargo tree --workspace --locked -i libsqlite3-sys
+          if cargo tree --workspace --locked -i rsa | grep -q 'rsa v'; then
+            echo "RSA remains in the active Rust dependency graph."
+            exit 1
+          fi
+      - name: Compile workspace against refreshed lockfile
+        run: cargo check --workspace --all-targets --locked
+      - name: Publish refreshed Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: refreshed-cargo-lock
+          path: Cargo.lock
+          if-no-files-found: error
+          retention-days: 7
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest

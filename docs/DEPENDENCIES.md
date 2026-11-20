@@ -6,7 +6,7 @@ This repository commits lockfiles for reproducible Rust and Web dependency resol
 
 | Tool | Pin | Source |
 | --- | --- | --- |
-| Rust | 1.99 | `rust-toolchain.toml` |
+| Rust | 1.99 (workspace MSRV 1.94) | `rust-toolchain.toml` / `Cargo.toml` |
 | Node.js | 26.13.1 | `.nvmrc` |
 | npm | 11.20.0 | `apps/web/.npm-version` |
 | Rust dependency graph | locked | `Cargo.lock` |

@@ -145,10 +145,7 @@ if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \
 fi
 
 # Git-only keys must not be granted OpenSSH stdio/TCP forwarding.
-if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes \\
-  -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" \\
-  -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \\
-  -W 127.0.0.1:22 git@127.0.0.1 </dev/null >/dev/null 2>&1; then
+if ssh -p "$SSH_PORT" -i "$KEY_FILE" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" -o BatchMode=yes -o ControlMaster=no -o ControlPath=none -W 127.0.0.1:22 git@127.0.0.1 </dev/null >/dev/null 2>&1; then
   echo "ERROR: Git-only SSH key retained TCP forwarding capability." >&2
   exit 1
 fi

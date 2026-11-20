@@ -44,15 +44,10 @@ IFS=/ read -r OWNER REPO EXTRA < "$STATE_FILE"
   exit 1
 }
 
-TOKEN="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/auth/login" \\
-  -H "Content-Type: application/json" \\
-  -d "$(jq -n --arg username "$ADMIN_USERNAME" --arg password "$ADMIN_PASSWORD" '{username:$username,password:$password}')" \\
-  | jq -er '.access_token')"
+TOKEN="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/auth/login" -H "Content-Type: application/json" -d "$(jq -n --arg username "$ADMIN_USERNAME" --arg password "$ADMIN_PASSWORD" '{username:$username,password:$password}')" | jq -er '.access_token')"
 ssh-keygen -q -t ed25519 -N "" -f "$KEY_FILE"
 PUBLIC_KEY="$(cat "$KEY_FILE.pub")"
-KEY_ID="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/user/ssh-keys" \\
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
-  -d "$(jq -n --arg public_key "$PUBLIC_KEY" '{public_key:$public_key}')" | jq -er '.id')"
+KEY_ID="$(curl --fail --silent --show-error -X POST "$API_BASE/api/v1/user/ssh-keys" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$(jq -n --arg public_key "$PUBLIC_KEY" '{public_key:$public_key}')" | jq -er '.id')"
 ssh-keyscan -T 5 -t ed25519 -p "$SSH_PORT" 127.0.0.1 2>/dev/null > "$KNOWN_HOSTS"
 test -s "$KNOWN_HOSTS"
 

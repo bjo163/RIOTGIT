@@ -211,10 +211,10 @@ pub(crate) async fn create_issue(
             "Issue title must contain 1-200 bytes.",
         ));
     }
-    if let Some(body) = input.body.as_deref() {
-        if !body.is_empty() {
-            validate_body(body)?;
-        }
+    if let Some(body) = input.body.as_deref()
+        && !body.is_empty()
+    {
+        validate_body(body)?;
     }
 
     let issue = sqlx::query_as::<_, Issue>(

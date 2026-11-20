@@ -111,9 +111,7 @@ if [[ "$HAS_SSH_ARCHIVE" -eq 1 ]]; then
   log "Restoring SSH host keys from $SSH_ARCHIVE into volume $SSH_HOSTKEYS_VOLUME."
   docker run --rm --network none -v "$SSH_HOSTKEYS_VOLUME:/data" -v "$SSH_ARCHIVE:/restore/input.tar.gz:ro" alpine:3.22 sh -ec 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} \; && tar -xzf /restore/input.tar.gz -C /data && chown -R 0:0 /data && chmod 0600 /data/ssh_host_ed25519_key && chmod 0644 /data/ssh_host_ed25519_key.pub'
 
-  HOSTKEY_ENTRY="$(tar -tzf "$SSH_ARCHIVE" | grep 'ssh_host_ed25519_key.pub
-log "Restore complete. Safety snapshots retained in $BACKUP_DIR."
- | head -n 1 || true)"
+  HOSTKEY_ENTRY="$(tar -tzf "$SSH_ARCHIVE" | grep -E '(^|/)ssh_host_ed25519_key\\.pub$' | head -n 1 || true)"
   [[ -n "$HOSTKEY_ENTRY" ]] || fail "SSH host-key archive does not contain ssh_host_ed25519_key.pub."
   EXPECTED_HOSTKEY_SHA="$(tar -xOzf "$SSH_ARCHIVE" "$HOSTKEY_ENTRY" | sha256sum | awk '{print $1}')"
   ACTUAL_HOSTKEY_SHA="$(docker run --rm --network none -v "$SSH_HOSTKEYS_VOLUME:/data:ro" alpine:3.22 sh -ec 'sha256sum /data/ssh_host_ed25519_key.pub | cut -d " " -f1')"

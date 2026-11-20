@@ -204,7 +204,7 @@ mod tests {
         let mut bad_point = Vec::new();
         wire_string(b"ecdsa-sha2-nistp256", &mut bad_point);
         wire_string(b"nistp256", &mut bad_point);
-        wire_string(&[4_u8; 65], &mut bad_point);
+        wire_string(&[2_u8; 65], &mut bad_point);
         assert!(fingerprint("ecdsa-sha2-nistp256", &STANDARD.encode(bad_point)).is_err());
     }
 

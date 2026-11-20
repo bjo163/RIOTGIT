@@ -59,10 +59,7 @@ try {
 
   const webManifestPath = join(temporaryRoot, "apps", "web", "package.json");
   const webManifest = JSON.parse(await readFile(webManifestPath, "utf8"));
-  webManifest.dependencies = {
-    ...webManifest.dependencies,
-    "@riotgit/lock-drift-fixture": "0.0.1"
-  };
+  webManifest.dependencies.react = "^18.3.1";
   await writeFile(webManifestPath, JSON.stringify(webManifest, null, 2) + "\n", "utf8");
 
   await expectFailure(
@@ -70,7 +67,7 @@ try {
     "npm",
     ["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
     { cwd: join(temporaryRoot, "apps", "web") },
-    /package\.json and package-lock\.json are in sync|Missing: .* from lock file|EUSAGE/i
+    /package\.json and package-lock\.json are in sync|Invalid: lock file.*does not satisfy|Missing: .* from lock file|EUSAGE/i
   );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });

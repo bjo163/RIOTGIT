@@ -17,10 +17,14 @@ jobs:
 
   dependency-lock-refresh:
     name: Refresh SQLx and SQLite lockfile
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/stabilization-nov20'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
       - uses: dtolnay/rust-toolchain@1.99
       - name: Upgrade SQLx and patched SQLite binding
         run: |
@@ -44,12 +48,29 @@ jobs:
           path: Cargo.lock
           if-no-files-found: error
           retention-days: 7
+      - name: Commit refreshed Cargo.lock to the stabilization branch
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Cargo.lock is already current."
+            exit 0
+          fi
+          git commit -m "build(deps): lock SQLx 0.9.1 and patched SQLite"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
   rust:
+    needs: dependency-lock-refresh
+    if: ${{ !cancelled() && (needs.dependency-lock-refresh.result == 'success' || needs.dependency-lock-refresh.result == 'skipped') }}
     name: Rust checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.sha }}
       - uses: dtolnay/rust-toolchain@1.99
         with:
           components: rustfmt, clippy
@@ -64,6 +85,8 @@ jobs:
         run: bash scripts/smoke-git-http.sh
 
   web:
+    needs: dependency-lock-refresh
+    if: ${{ !cancelled() && (needs.dependency-lock-refresh.result == 'success' || needs.dependency-lock-refresh.result == 'skipped') }}
     name: Web checks
     runs-on: ubuntu-latest
     defaults:
@@ -71,6 +94,8 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -85,10 +110,14 @@ jobs:
 
 
   dependency-security:
+    needs: dependency-lock-refresh
+    if: ${{ !cancelled() && (needs.dependency-lock-refresh.result == 'success' || needs.dependency-lock-refresh.result == 'skipped') }}
     name: Dependency security and license inventory
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.sha }}
       - uses: dtolnay/rust-toolchain@1.99
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
@@ -142,11 +171,15 @@ jobs:
           }
 
   ssh:
+    needs: dependency-lock-refresh
+    if: ${{ !cancelled() && (needs.dependency-lock-refresh.result == 'success' || needs.dependency-lock-refresh.result == 'skipped') }}
     name: OpenSSH Git transport
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.sha }}
       - name: Configure isolated CI instance
         run: |
           {

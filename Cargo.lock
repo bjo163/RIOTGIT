@@ -1402,7 +1402,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "hex",
  "rand_core 0.6.4",
  "serde",

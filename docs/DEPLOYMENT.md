@@ -2,9 +2,9 @@
 
 ## Current scope
 
-The Compose profile runs the Rust API and Next.js web application on one machine. It now includes SQLite metadata, local identity/sessions, repository-level permissions, native bare Git storage, authenticated Git Smart HTTP, browser code views, Issues/labels/milestones, Pull Requests/reviews/merge, and branch protection for Smart HTTP pushes.
+The Compose profile runs the Rust API and Next.js web application on one machine. It now includes SQLite metadata, local identity/sessions, repository-level permissions, native bare Git storage, authenticated Git Smart HTTP, browser code views, Issues/labels/milestones, Pull Requests/reviews/merge, and branch protection for Smart HTTP and restricted SSH receive-pack.
 
-This is an early self-hosted release foundation, not a claim of complete production hardening. A restricted OpenSSH gateway is available through the optional `ssh` Compose profile; it requires the separate SSH integration smoke test and deployment-specific host-key/firewall review. Large-pack streaming, Git LFS, PostgreSQL, CI runners, federation/P2P, and AI agent execution are not enabled.
+This is an early self-hosted release foundation, not a claim of complete production hardening. A restricted OpenSSH gateway is available through the optional `ssh` Compose profile. CI #264 verifies clone/fetch/push permissions, branch rules, unknown/revoked keys, no-shell/forwarding, audit records, and recovery continuity; deployment-specific host-key/firewall review is still required. Large-pack streaming, Git LFS, PostgreSQL, CI runners, federation/P2P, and AI agent execution are not enabled.
 
 ## Requirements
 
@@ -106,6 +106,6 @@ Do not roll back only the database or only repository storage. Migrations are ve
 - Browser sessions use HttpOnly/SameSite cookies and mutating web API calls are guarded by the Next.js same-origin proxy.
 - Login failures are throttled per normalized username; IP-aware rate limiting and proxy-trust hardening remain outstanding.
 - SSH public keys can be registered, listed, and revoked. The optional gateway applies a forced command and disables interactive shell/forwarding. Keep the SSH profile disabled until its end-to-end smoke test passes; validate the persisted host-key fingerprint before public exposure.
-- Branch protection is enforced for Git Smart HTTP receive-pack; do not assume it covers SSH until SSH transport is implemented.
+- Branch protection is enforced for both Git Smart HTTP receive-pack and the restricted SSH receive-pack hook; CI #264 exercises both paths.
 - Containers run as non-root with read-only root filesystems and loopback host bindings.
 - CI runner, federation/P2P, and AI execution services are intentionally absent from this Compose profile.

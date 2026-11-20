@@ -28,9 +28,9 @@ R!OTGIT is a self-hosted, local-first Git forge foundation with a loud punk iden
 - Rust CLI for login, identity, repository list/create/clone, SSH-key management, and logout.
 - SSH public-key register/list/revoke API and per-username login failure throttling.
 - Same-origin guard for mutating Next.js web API routes.
-- Docker-volume backup/restore scripts and recovery runbook (restore drill still required).
+- Docker-volume backup/restore scripts with CI recovery verification: audit rows, bare-repository fsck, existing-repository SSH clone/fetch, commit marker, and host-key continuity; off-host restore remains required.
 
-See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) and [the last known successful CI baseline](https://github.com/bjo163/RIOTGIT/actions/runs/43494098100). Check the implementation-status document for the latest main-branch CI result and outstanding verification gates.
+See [Implementation Status](docs/IMPLEMENTATION-STATUS.md) for the latest verified PR CI state and remaining production-readiness gates.
 
 ## Terminal CLI
 
@@ -176,6 +176,7 @@ To push, the session must have repository `write` or `admin` permission. A `read
 - [Security baseline](docs/SECURITY.md)
 - [Delivery roadmap](docs/ROADMAP.md)
 - [Implementation status](docs/IMPLEMENTATION-STATUS.md)
+- [Dependency policy and audit](docs/DEPENDENCIES.md)
 - [API guide](apps/api/README.md)
 - [Deployment guide](docs/DEPLOYMENT.md)
 - [Contribution standards](CONTRIBUTING.md)

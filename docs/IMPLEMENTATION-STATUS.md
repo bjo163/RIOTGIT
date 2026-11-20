@@ -12,7 +12,7 @@ https://github.com/bjo163/RIOTGIT/actions/runs/43497718230
 
 Run #243 is **red**: Web checks passed; Rust checks stopped at `cargo fmt --all -- --check` because two expressions in `apps/cli/src/main.rs` were not rustfmt-formatted; the OpenSSH smoke job failed its final revocation assertion. Code inspection found that the smoke script initially exported the administrator `GIT_SSH_COMMAND`, then reassigned that exported variable to the reader identity. Bash preserved the export attribute, so later administrator-only branch-protection and revocation assertions could run with the reader key. The stabilization branch keeps administrator and reader commands separate and explicitly selects the identity for each Git operation.
 
-The first full stabilization verification passed in CI run #245 on PR #18: Rust format/check/clippy/tests/build and Smart HTTP round-trip passed; Web typecheck/lint/build passed; API/web/SSH images built and started; web readiness passed; and OpenSSH clone/push, read-only denial, branch-protection denial, no-shell, and key revocation passed. This is branch/PR evidence, not a green result on `main`. PR CI #253 on commit `315dc2a8b2382efc497b9bd5babc6570aa79086a` passed all three jobs. In addition to the #245 coverage, #253 verified Cargo `--locked`, npm `ci`, exact Node/npm pins, API/Web/SSH container build and startup, same-node data + SSH host-key backup/restore, API/Web readiness after restore, SSH host-key continuity, and a second SSH clone/push/revocation smoke. This is branch/PR evidence, not a green result on `main`.
+PR CI #264 on commit `4f540b4f67d73daeaac029e2dff90670bbc86800` passed all five jobs: lock refresh/graph validation, Rust format/check/Clippy/tests/build/Smart HTTP, Web npm ci/typecheck/lint/build, dependency security/license inventory, and Docker/OpenSSH plus the expanded single-node restore drill. The dependency graph uses SQLx 0.9.1 and `libsqlite3-sys` 0.40.0; `rsa` is absent from the active graph, and both `cargo audit` and `npm audit --audit-level=high` passed. Recovery verified audit rows, `git fsck` for restored bare repositories, clone/fetch of a pre-backup repository with a commit marker, and SSH host-key continuity. This is PR/branch evidence only; `main` remains at the older snapshot until PR #18 is merged.
 
 This is CI evidence only; it is not a substitute for deployment-specific SSH host-key review, an off-host restore drill, upgrade/rollback validation, or a production security assessment. This document intentionally separates committed implementation from tested/production-ready capability.
 
@@ -34,7 +34,7 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 - [x] Read/write permissions applied to Git Smart HTTP.
 - [x] Per-username login failure throttle (10 failed attempts in 15 minutes).
 - [x] SSH public-key registration/list/revocation API with key type/blob validation and SHA-256 fingerprints.
-- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; PR CI #245 verifies clone/push, read-only push denial, branch protection, no interactive shell, and revocation with isolated admin/reader SSH identities.
+- [x] Optional OpenSSH gateway with database-backed authorized keys, key-bound forced command, restricted Git-only services, and a protected receive-pack hook; PR CI #264 verifies clone/fetch/push, read-only denial, unknown/revoked-key denial, branch protection, no shell/forwarding, and SSH audit events.
 - [x] Same-origin guard for mutating Next.js web API routes.
 - [x] Emergency instance-admin token.
 
@@ -60,14 +60,15 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 ### Operations
 - [x] Rust and web Dockerfiles plus single-node Compose profile.
 - [x] Non-root runtime users, read-only container root filesystems, loopback host bindings, persistent data volume, and health checks.
-- [x] GitHub Actions Rust/web CI, Git Smart HTTP smoke coverage, OpenSSH end-to-end smoke coverage, API/web/SSH image build/start, web readiness, and same-node backup/restore smoke coverage are implemented. PR CI #253 passed all three jobs; this does not change the failing state of main until PR #18 is merged.
+- [x] GitHub Actions Rust/Web, dependency security/license, Docker/OpenSSH, and same-node recovery checks are implemented. PR CI #264 passed all five jobs; this does not change `main` until PR #18 is merged.
 - [x] Backup and restore scripts for the complete single-node data volume.
 - [x] Backup/restore runbook with pre-restore safety snapshot and checksum instructions.
 
 ## Remaining work
 
 ### Git and security
-- [ ] Add explicit SSH read-only-key denial coverage, broader OpenSSH/Git interoperability fixtures, and deployment-specific host-key/security review.
+- [x] SSH read-only, unknown/revoked-key, shell/forwarding denial, branch protection, and audit-record checks pass in CI #264.
+- [ ] Broader OpenSSH/Git interoperability and adversarial key-parser fixtures, plus deployment-specific host-key/firewall/security review.
 - [ ] Large-pack streaming/backpressure; Smart HTTP currently buffers bounded request/response bodies.
 - [ ] Git LFS.
 - [ ] IP-aware API rate limiting, reverse-proxy trust configuration, token rotation, security review, and full CSRF/proxy deployment review.
@@ -88,22 +89,23 @@ This is CI evidence only; it is not a substitute for deployment-specific SSH hos
 
 ### Production readiness
 - [x] Commit `Cargo.lock`, `apps/web/package-lock.json`, and pin Node/npm versions on the stabilization branch.
-- [x] Same-node Compose backup/restore smoke passed in PR CI #253, including data and SSH host-key volumes, post-restore API/Web readiness, host-key continuity, and SSH smoke. A separate-host/off-host restore drill is still required.
+- [x] Same-node Compose backup/restore passed in PR CI #264, including data and SSH host-key volumes, audit evidence, post-restore service health, `git fsck`, existing-repository clone/fetch and commit marker, and host-key continuity.
+- [ ] Separate-host/off-host restore, corrupted-backup/disk-full/interrupted-write tests, and upgrade/rollback validation.
 - [ ] Validate upgrade/rollback against data snapshots.
 - [x] API and SSH container build/start/health/transport smoke test in CI.
-- [x] Build and start the web container in CI and wait for `/login` readiness (passed in PR CI #253).
+- [x] Build and start the web container in CI and wait for `/login` readiness (passed in PR CI #264).
 - [ ] Load, soak, disk-full, crash-recovery, and large-pack tests.
 - [ ] Full security review and release checklist.
-- [ ] Verify SSH gateway host-key persistence, authorized-key revocation, no-shell restrictions, and hook execution on the target host.
+- [ ] Verify SSH host-key persistence and forwarding/firewall policy on the target deployment host; CI covers key revocation, no-shell, and hook enforcement.
 
 ## Important limitations
 
-- Git Smart HTTP and the optional SSH path passed PR CI #253 after the SSH smoke test was corrected to use separate admin/reader identities and unique per-invocation fixtures. The current main branch has not yet received that fix.
+- Git Smart HTTP and the optional SSH path passed PR CI #264, including separate admin/reader identities, unknown/revoked-key denial, forwarding restrictions, branch policy, and audit records. `main` has not received these changes until PR #18 is merged.
 - Branch protection is covered on both Smart HTTP and SSH receive-pack paths by the current CI smoke checks; broader shared-policy regression coverage is still required.
 - Login throttling is per normalized username, not IP-aware. It reduces repeated guessing but can be used to temporarily throttle a known username.
-- PR CI #253 covers locked Rust checks, npm ci/typecheck/lint/build, Docker image build/start, Smart HTTP round-trip, SSH clone/push/security tests, and same-node backup/restore with host-key continuity.
+- PR CI #264 covers locked Rust checks, npm ci/typecheck/lint/build, Rust/npm dependency audits, license inventory, Docker image build/start, Smart HTTP round-trip, SSH security tests, and same-node recovery with audit/fsck/clone-fetch/host-key checks.
 - The CLI is an initial terminal interface, not a TUI or full feature-complete admin client.
-- Same-node data and SSH host-key backup/restore passed PR CI #253. A separate-host/off-host restore and upgrade/rollback drill have not yet been completed.
+- Same-node data and SSH host-key recovery passed PR CI #264. A separate-host/off-host restore and upgrade/rollback drill have not yet been completed.
 - R!OTGIT is not yet a fully hardened production Git forge. PostgreSQL parity, durable jobs/webhooks, isolated CI runners, P2P/federation, and AI agent execution remain unfinished.
 
 ## Local run
@@ -140,12 +142,12 @@ See [API README](../apps/api/README.md), [CLI guide](../apps/cli/README.md), [De
 | P0 #1 API contracts and boundaries | Foundation exists; not closed | API error conventions and architecture docs exist; typed config, request IDs, and complete module extraction still need verification. |
 | P0 #2 metadata/data access | SQLite foundation implemented; not closed | Versioned SQLite migrations exist; PostgreSQL adapter and cross-database tests are not implemented. |
 | P0 #3 repository lifecycle | Core path implemented; not closed | Native bare repo lifecycle exists; quota/size accounting, symlink adversarial tests, archive/delete/maintenance coverage remain. |
-| P0 #4 SSH transport | Implemented; PR CI verified | CI #253 passed clone/push, read-only denial, branch-protection denial, no-shell, and revocation using isolated identities; deployment host-key review remains. |
-| P0 #17 dependency locking | Locked path verified on stabilization branch | Cargo.lock/package-lock.json are committed; CI and Docker passed Cargo `--locked` and npm `ci` with Node 26.13.1/npm 11.20.0 in PR CI #253. Dependency audit/update automation still needs completion. |
+| P0 #4 SSH transport | CI functional acceptance passed; deployment review open | CI #264 passed clone/fetch/push, read-only and unknown/revoked-key denial, branch rules, no-shell/forwarding denial, and audit records; deployment host-key/firewall review and adversarial fixtures remain. |
+| P0 #17 dependency locking | Locked and security-audited on PR branch | Cargo.lock/package-lock.json are committed; Cargo `--locked`, npm `ci`, Node 26.13.1/npm 11.20.0, weekly Dependabot, `cargo audit`, `npm audit`, and license inventory passed CI #264. An explicit manifest-drift negative fixture and human license review remain. |
 | P1 #5–#10 forge and identity | Partially implemented | HTTP, browser, collaboration, branch protection, issues, and SSH key registry exist; large-pack streaming, org/team RBAC, inline review, richer timeline, UI completeness, and E2E coverage remain. |
-| P1 #16 operations | Partial; same-node recovery verified | API/web/SSH build/start, health/readiness, backup/restore of data and SSH host-key volumes, post-restore health, and host-key continuity passed in CI #253; separate-host restore and upgrade/rollback remain. |
+| P1 #16 operations | Same-node recovery passed; off-host drills open | CI #264 passed API/Web/SSH build/start, audit inspection, data + host-key restore, health checks, `git fsck`, existing repository clone/fetch, commit marker, and host-key continuity. Separate-host restore, upgrade/rollback, and storage-failure drills remain. |
 | P2 #11 CLI | Initial implementation exists | Core login/repository/SSH-key commands exist; profiles, OS credential vault, JSON output, status, and dedicated CLI integration tests remain. |
 | P2 #12 jobs/webhooks | Not implemented | No durable outbox/worker or signed webhook delivery; SSRF-safe delivery must be designed before enabling outbound requests. |
 | P2 #13 CI runner | Not implemented | No isolated workflow runner; must remain a separate execution boundary from the API. |
 
-P2 is **not complete**. Main is still at the failing CI snapshot #243 until PR #18 is merged. The stabilization branch has a fully green CI run #253, including locked dependency installs and a same-node recovery drill. Separate-host recovery, upgrade/rollback, dependency audit automation, and the remaining P0–P3 roadmap items are still open. Do not close issues until their full acceptance criteria and verification gates pass.
+P2 is **not complete**. `main` remains at the older CI snapshot until PR #18 is merged. The stabilization branch passed all five CI jobs in #264, including SQLx/SQLite advisory remediation, dependency audits, and the full single-node recovery smoke. Separate-host recovery, upgrade/rollback, deployment security review, and the remaining P0–P3 roadmap items remain open. Do not close issues until every acceptance criterion and verification gate passes.

@@ -12,7 +12,7 @@ This repository commits lockfiles for reproducible Rust and Web dependency resol
 | Rust dependency graph | locked | `Cargo.lock` |
 | Web dependency graph | npm lockfile v3 | `apps/web/package-lock.json` |
 
-Rust CI/API Docker use Cargo `--locked`; Web CI/Docker use `npm ci`. A manifest/lockfile mismatch must fail instead of silently regenerating a lockfile.
+SQLx is pinned to 0.9.1 with SQLite-only features; the MySQL RSA feature is not enabled. The committed lockfile resolves `libsqlite3-sys` 0.40.0 (SQLite 3.54.1) and no longer contains `rsa`. Rust CI/API Docker use Cargo `--locked`; Web CI/Docker use `npm ci`. A manifest/lockfile mismatch must fail instead of silently regenerating a lockfile.
 
 ## Update policy
 
@@ -20,6 +20,6 @@ Dependabot checks Cargo, npm, and GitHub Actions weekly. Patch/minor updates are
 
 ## Security and license inventory
 
-A parallel CI lane runs RustSec `cargo-audit` pinned to 0.23.0, `npm audit --audit-level=high`, and a machine-readable Cargo/npm license inventory. JSON audit output and the TSV license inventory are uploaded as a 30-day artifact.
+A parallel CI lane runs RustSec `cargo-audit` pinned to 0.23.0, `npm audit --audit-level=high`, and a machine-readable Cargo/npm license inventory. CI #264 passed both audits and published the JSON/TSV reports as a 30-day artifact.
 
 Fix advisories or record narrowly justified exceptions; do not hide findings by raising severity thresholds. The product repository is currently marked `UNLICENSED`; the inventory is evidence for a future license decision, not an assertion of redistribution approval. Review unknown license metadata and incompatible licenses before selecting a project license.

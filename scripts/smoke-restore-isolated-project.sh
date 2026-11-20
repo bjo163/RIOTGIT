@@ -20,10 +20,19 @@ DATA_ARCHIVE=""
 log() { printf '[riotgit-recovery-project] %s\n' "$*"; }
 fail() { log "ERROR: $*" >&2; exit 1; }
 
+target_compose() {
+  env \
+    COMPOSE_PROJECT_NAME="$TARGET_PROJECT" \
+    RIOTGIT_API_PORT="$TARGET_API_PORT" \
+    RIOTGIT_WEB_PORT="$TARGET_WEB_PORT" \
+    RIOTGIT_SSH_PORT="$TARGET_SSH_PORT" \
+    docker compose --project-name "$TARGET_PROJECT" -f "$COMPOSE_FILE" --env-file "$TARGET_ENV" --profile ssh "$@"
+}
+
 cleanup() {
   local status=$?
   trap - EXIT
-  COMPOSE_PROJECT_NAME="$TARGET_PROJECT" docker compose -f "$COMPOSE_FILE" --env-file "$TARGET_ENV" --profile ssh down -v --remove-orphans >/dev/null 2>&1 || true
+  target_compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$TMP_DIR"
   exit "$status"
 }
@@ -55,11 +64,11 @@ RIOTGIT_SSH_PORT=$TARGET_SSH_PORT
 EOF
 
 log "Starting an isolated Compose project with independent data and SSH volumes."
-docker compose --project-name "$TARGET_PROJECT" -f "$COMPOSE_FILE" --env-file "$TARGET_ENV" --profile ssh up -d api web ssh
+target_compose up -d api web ssh
 
 TARGET_API_URL="http://127.0.0.1:$TARGET_API_PORT"
 TARGET_WEB_URL="http://127.0.0.1:$TARGET_WEB_PORT"
-TARGET_API_CONTAINER="$(docker compose --project-name "$TARGET_PROJECT" -f "$COMPOSE_FILE" --env-file "$TARGET_ENV" --profile ssh ps -q api)"
+TARGET_API_CONTAINER="$(target_compose ps -q api)"
 [[ -n "$TARGET_API_CONTAINER" ]] || fail "Target API container did not start."
 TARGET_DATA_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/riotgit"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$TARGET_API_CONTAINER")"
 [[ -n "$TARGET_DATA_VOLUME" ]] || fail "Could not resolve the target data volume."

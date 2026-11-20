@@ -385,19 +385,19 @@ pub(crate) async fn transport(
         }
     };
 
-    if parts.method == Method::POST && service_path == "git-receive-pack" {
-        if let Err(status) =
+    if parts.method == Method::POST
+        && service_path == "git-receive-pack"
+        && let Err(status) =
             enforce_branch_protection(&state, &repository_id, &storage_path, &request_body).await
-        {
-            let message = if status == StatusCode::FORBIDDEN {
-                "Branch protection rejected this direct Git update."
-            } else if status == StatusCode::BAD_REQUEST {
-                "Malformed Git receive-pack command list."
-            } else {
-                "Branch protection could not be evaluated."
-            };
-            return plain_response(status, message);
-        }
+    {
+        let message = if status == StatusCode::FORBIDDEN {
+            "Branch protection rejected this direct Git update."
+        } else if status == StatusCode::BAD_REQUEST {
+            "Malformed Git receive-pack command list."
+        } else {
+            "Branch protection could not be evaluated."
+        };
+        return plain_response(status, message);
     }
 
     let path_info = format!("/{storage_key}/{service_path}");
@@ -458,14 +458,14 @@ pub(crate) async fn transport(
         }
     };
 
-    if let Some(mut stdin) = child.stdin.take() {
-        if let Err(error) = stdin.write_all(&request_body).await {
-            error!(%error, "failed to pass Git request body to backend");
-            return plain_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Git transport request failed.",
-            );
-        }
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(error) = stdin.write_all(&request_body).await
+    {
+        error!(%error, "failed to pass Git request body to backend");
+        return plain_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Git transport request failed.",
+        );
     }
 
     let output = match timeout(Duration::from_secs(120), child.wait_with_output()).await {

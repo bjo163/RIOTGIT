@@ -153,10 +153,11 @@ async fn run() -> Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    if let Ok(protocol) = env::var("GIT_PROTOCOL") {
-        if protocol.len() <= 64 && protocol.bytes().all(|byte| byte.is_ascii_graphic()) {
-            command.env("GIT_PROTOCOL", protocol);
-        }
+    if let Ok(protocol) = env::var("GIT_PROTOCOL")
+        && protocol.len() <= 64
+        && protocol.bytes().all(|byte| byte.is_ascii_graphic())
+    {
+        command.env("GIT_PROTOCOL", protocol);
     }
 
     let status = command

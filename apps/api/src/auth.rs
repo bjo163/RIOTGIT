@@ -220,15 +220,15 @@ pub(crate) async fn actor_from_token(token: &str, state: &AppState) -> Option<Ac
     }
 
     let actual: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-    if let Some(expected) = state.api_token_digest {
-        if bool::from(expected.ct_eq(&actual)) {
-            return Some(Actor {
-                user_id: "system".to_owned(),
-                username: "system".to_owned(),
-                role: "admin".to_owned(),
-                session_id: None,
-            });
-        }
+    if let Some(expected) = state.api_token_digest
+        && bool::from(expected.ct_eq(&actual))
+    {
+        return Some(Actor {
+            user_id: "system".to_owned(),
+            username: "system".to_owned(),
+            role: "admin".to_owned(),
+            session_id: None,
+        });
     }
 
     let digest = hex::encode(actual);

@@ -9,7 +9,9 @@ ADMIN_USERNAME="${RIOTGIT_ADMIN_USERNAME:?Set RIOTGIT_ADMIN_USERNAME in .env}"
 ADMIN_PASSWORD="${RIOTGIT_ADMIN_PASSWORD:?Set RIOTGIT_ADMIN_PASSWORD in .env}"
 KNOWN_HOSTS="$TMP_DIR/known_hosts"
 KEY_FILE="$TMP_DIR/ssh-smoke"
-REPO_NAME="ssh-smoke-$(date -u +%H%M%S)"
+REPO_SUFFIX="${TMP_DIR##*/}"
+REPO_SUFFIX="${REPO_SUFFIX//[^[:alnum:]]/}"
+REPO_NAME="ssh-smoke-${REPO_SUFFIX}"
 
 cleanup() {
   status=$?

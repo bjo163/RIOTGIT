@@ -77,33 +77,7 @@ pub fn valid_segment(value: &str) -> bool {
 }
 
 pub fn key_fingerprint(key_type: &str, encoded_blob: &str) -> Result<String> {
-    if !matches!(
-        key_type,
-        "ssh-ed25519"
-            | "ecdsa-sha2-nistp256"
-            | "sk-ssh-ed25519@openssh.com"
-            | "sk-ecdsa-sha2-nistp256@openssh.com"
-            | "ssh-rsa"
-    ) {
-        anyhow::bail!("Unsupported SSH key type");
-    }
-
-    let blob = STANDARD
-        .decode(encoded_blob)
-        .context("Malformed SSH public key base64")?;
-    if blob.len() < 8 {
-        anyhow::bail!("SSH public key blob is too short");
-    }
-
-    let length = u32::from_be_bytes(blob[0..4].try_into()?) as usize;
-    if length != key_type.len() || blob.get(4..4 + length) != Some(key_type.as_bytes()) {
-        anyhow::bail!("SSH public key type does not match its blob");
-    }
-
-    Ok(format!(
-        "SHA256:{}",
-        STANDARD_NO_PAD.encode(Sha256::digest(blob))
-    ))
+    ssh_public_key::fingerprint(key_type, encoded_blob).map_err(anyhow::Error::msg)
 }
 
 pub fn fingerprint_from_auth_info(path: &Path) -> Result<String> {

@@ -9,16 +9,11 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
 };
-use base64::{
-    Engine as _,
-    engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
-};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, SqlitePool};
 use subtle::ConstantTimeEq;
-use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 

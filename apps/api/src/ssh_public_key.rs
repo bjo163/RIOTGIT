@@ -7,10 +7,7 @@ use sha2::{Digest, Sha256};
 const MAX_BLOB_BYTES: usize = 8 * 1024;
 const MAX_RSA_BITS: usize = 8 * 1024;
 
-fn read_wire_string<'a>(
-    blob: &'a [u8],
-    offset: &mut usize,
-) -> Result<&'a [u8], &'static str> {
+fn read_wire_string<'a>(blob: &'a [u8], offset: &mut usize) -> Result<&'a [u8], &'static str> {
     let length_end = (*offset).checked_add(4).ok_or("SSH key length overflow")?;
     let length_bytes = blob
         .get(*offset..length_end)
@@ -108,8 +105,7 @@ fn validate_blob(key_type: &str, blob: &[u8]) -> Result<(), &'static str> {
                 return Err("RSA public exponent must be an odd integer of at least 3");
             }
 
-            let bits = (modulus.len() - 1) * 8
-                + (8 - modulus[0].leading_zeros() as usize);
+            let bits = (modulus.len() - 1) * 8 + (8 - modulus[0].leading_zeros() as usize);
             if !(2048..=MAX_RSA_BITS).contains(&bits) {
                 return Err("RSA modulus must be between 2048 and 8192 bits");
             }
@@ -123,10 +119,7 @@ fn validate_blob(key_type: &str, blob: &[u8]) -> Result<(), &'static str> {
     Ok(())
 }
 
-pub(crate) fn fingerprint(
-    key_type: &str,
-    encoded_blob: &str,
-) -> Result<String, &'static str> {
+pub(crate) fn fingerprint(key_type: &str, encoded_blob: &str) -> Result<String, &'static str> {
     if encoded_blob.len() > 12 * 1024 {
         return Err("SSH public key data is too large");
     }
@@ -169,11 +162,7 @@ mod tests {
 
         let mut security_key = ed25519_blob("sk-ssh-ed25519@openssh.com", &public_key);
         wire_string(b"ssh:riotgit-test", &mut security_key);
-        assert!(fingerprint(
-            "sk-ssh-ed25519@openssh.com",
-            &STANDARD.encode(security_key)
-        )
-        .is_ok());
+        assert!(fingerprint("sk-ssh-ed25519@openssh.com", &STANDARD.encode(security_key)).is_ok());
     }
 
     #[test]
@@ -210,32 +199,26 @@ mod tests {
         wire_string(b"ecdsa-sha2-nistp256", &mut wrong_curve);
         wire_string(b"nistp384", &mut wrong_curve);
         wire_string(&point, &mut wrong_curve);
-        assert!(fingerprint(
-            "ecdsa-sha2-nistp256",
-            &STANDARD.encode(wrong_curve)
-        )
-        .is_err());
+        assert!(fingerprint("ecdsa-sha2-nistp256", &STANDARD.encode(wrong_curve)).is_err());
 
         let mut bad_point = Vec::new();
         wire_string(b"ecdsa-sha2-nistp256", &mut bad_point);
         wire_string(b"nistp256", &mut bad_point);
         wire_string(&[4_u8; 65], &mut bad_point);
-        assert!(fingerprint(
-            "ecdsa-sha2-nistp256",
-            &STANDARD.encode(bad_point)
-        )
-        .is_err());
+        assert!(fingerprint("ecdsa-sha2-nistp256", &STANDARD.encode(bad_point)).is_err());
     }
 
     #[test]
     fn validates_security_key_application_and_rsa_strength() {
         let mut missing_application = ed25519_blob("sk-ssh-ed25519@openssh.com", &[3_u8; 32]);
         wire_string(b"", &mut missing_application);
-        assert!(fingerprint(
-            "sk-ssh-ed25519@openssh.com",
-            &STANDARD.encode(missing_application)
-        )
-        .is_err());
+        assert!(
+            fingerprint(
+                "sk-ssh-ed25519@openssh.com",
+                &STANDARD.encode(missing_application)
+            )
+            .is_err()
+        );
 
         let mut weak_rsa = Vec::new();
         wire_string(b"ssh-rsa", &mut weak_rsa);

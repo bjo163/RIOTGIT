@@ -244,6 +244,8 @@ mod tests {
                 "unexpectedly accepted command: {command:?}"
             );
         }
-        assert!(parse_original_command(&format!("git-upload-pack '{}.git'", "a".repeat(1100))).is_err());
+        assert!(
+            parse_original_command(&format!("git-upload-pack '{}.git'", "a".repeat(1100))).is_err()
+        );
     }
 }

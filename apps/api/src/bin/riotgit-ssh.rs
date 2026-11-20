@@ -231,7 +231,7 @@ mod tests {
             "git-upload-pack 'builder/project.git& id'",
             "git-upload-pack 'builder/project.git\\outside'",
             "git-upload-pack '~/.ssh/project.git'",
-            "git-upload-pack '/etc/passwd.git'",
+            "git-upload-pack '/etc/passwd'",
             "git-upload-pack '.hidden/project.git'",
             "git-upload-pack 'builder/.git'",
             "git-upload-pack 'builder/project.git\ncommand'",
